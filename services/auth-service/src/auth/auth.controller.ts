@@ -16,7 +16,7 @@ import type { Request, Response } from 'express';
 import { parseDurationMs } from './utils/parse-duration-ms';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AuthUser, AuthUserWithRefresh } from './types/auth-user.type';
-import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { Public } from './decorators/public.decorator';
 import { Throttle } from '@nestjs/throttler';
@@ -136,6 +136,7 @@ export class AuthController {
   }
 
   @ApiCookieAuth('accessToken')
+  @ApiBearerAuth()
   @Get('status')
   status(@CurrentUser() user: AuthUser) {
     return { authenticated: true, user };

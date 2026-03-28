@@ -4,7 +4,6 @@ import Joi from 'joi';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { JwtAccessGuard } from './auth/guards/jwt-access.guard';
-import { UsersModule } from './users/users.module';
 import { RolesGuard } from './auth/guards/roles.guards';
 import { resolve } from 'path';
 
@@ -12,12 +11,16 @@ import { resolve } from 'path';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: [resolve(process.cwd(), '../../.env'), '.env'],
+      envFilePath: resolve(__dirname, '../../../.env'),
       validationSchema: Joi.object({
         PORT: Joi.number().port().default(3000),
-        USER_SERVICE_HOST: Joi.string().default('localhost'),
-        USER_SERVICE_PORT: Joi.number().port().default(4001),
         CORS_ORIGIN: Joi.string().default('http://localhost:5173'),
+        USER_SERVICE_URL: Joi.string()
+          .uri({ scheme: ['http', 'https'] })
+          .default('http://localhost:3002'),
+        POST_SERVICE_URL: Joi.string()
+          .uri({ scheme: ['http', 'https'] })
+          .default('http://localhost:8002'),
       }),
     }),
     ThrottlerModule.forRoot([
@@ -27,7 +30,6 @@ import { resolve } from 'path';
       },
     ]),
     AuthModule,
-    UsersModule,
   ],
   providers: [
     {

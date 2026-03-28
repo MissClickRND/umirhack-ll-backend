@@ -1,4 +1,6 @@
-export type Role = "ADMIN" | "WAITER" | "COOK" | "CUSTOMER";
+export const ROLES = ["ADMIN", "WAITER", "COOK", "CUSTOMER"] as const;
+
+export type Role = (typeof ROLES)[number];
 
 export type UsersListQuery = {
   search?: string;

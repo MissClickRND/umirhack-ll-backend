@@ -8,15 +8,24 @@ import { JwtService } from '@nestjs/jwt';
 import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
 import type { StringValue } from 'ms';
-import { UserClientService } from 'src/user-client/user-client.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
-    private readonly userClient: UserClientService,
+    private readonly prisma: PrismaService,
   ) {}
+
+  private readonly authSelect = {
+    id: true,
+    email: true,
+    passwordHash: true,
+    hashedRefreshToken: true,
+    role: true,
+    tokenVersion: true,
+  } as const;
 
   private getAccessSecret() {
     return this.config.get<string>('JWT_ACCESS_SECRET', { infer: true })!;
@@ -37,16 +46,23 @@ export class AuthService {
   async register(dto: RegisterDto) {
     const email = dto.email.toLowerCase().trim();
 
-    const existingUser = await this.userClient.findByEmail(email);
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
     if (existingUser) {
       throw new BadRequestException('User already exists');
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    const user = await this.userClient.create({
-      email,
-      passwordHash,
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+      },
+      select: this.authSelect,
     });
 
     const tokens = await this.issueTokens(
@@ -65,7 +81,10 @@ export class AuthService {
 
   async login(dto: RegisterDto) {
     const email = dto.email.toLowerCase().trim();
-    const user = await this.userClient.findByEmail(email);
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: this.authSelect,
+    });
 
     if (!user) throw new BadRequestException('Пользователь не найден');
 
@@ -85,13 +104,19 @@ export class AuthService {
   }
 
   async logout(userId: number) {
-    await this.userClient.logout(userId);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { hashedRefreshToken: null, tokenVersion: { increment: 1 } },
+    });
 
     return { ok: true };
   }
 
   async refreshTokens(userId: number, refreshTokenFromCookie: string) {
-    const user = await this.userClient.findAuthById(userId);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: this.authSelect,
+    });
 
     if (!user || !user.hashedRefreshToken)
       throw new ForbiddenException('Access Denied');
@@ -119,7 +144,10 @@ export class AuthService {
 
   private async setRefreshTokenHash(userId: number, refreshToken: string) {
     const hash = await bcrypt.hash(refreshToken, 10);
-    await this.userClient.setRefreshTokenHash(userId, hash);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { hashedRefreshToken: hash },
+    });
   }
 
   private async issueTokens(

@@ -3,10 +3,10 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
-import { UserClientModule } from 'src/user-client/user-client.module';
+import { PrismaModule } from 'src/prisma/prisma.module';
 
 @Module({
-  imports: [PassportModule, JwtModule.register({}), UserClientModule],
+  imports: [PassportModule, JwtModule.register({}), PrismaModule],
   providers: [JwtAccessStrategy, JwtRefreshStrategy],
   exports: [PassportModule, JwtModule],
 })

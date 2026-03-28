@@ -27,6 +27,15 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
 
+  post-service:
+    command: uvicorn app.main:app --host 0.0.0.0 --port ${POST_SERVICE_PORT} --reload
+    volumes:
+      - ./services/post-service:/app
+    environment:
+      AUTH_SERVICE_URL: http://host.docker.internal:${PORT}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   user_service_node_modules:
   auth_service_node_modules:

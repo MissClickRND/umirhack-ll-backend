@@ -1,5 +1,12 @@
-import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { Type } from "class-transformer";
+import { IsIn, IsInt, IsOptional, IsString, Max, Min } from "class-validator";
+
+const SORT_OPTIONS = [
+  "createdAt:asc",
+  "createdAt:desc",
+  "email:asc",
+  "email:desc",
+] as const;
 
 export class UsersListQueryDto {
   @IsOptional()
@@ -7,8 +14,8 @@ export class UsersListQueryDto {
   search?: string;
 
   @IsOptional()
-  @IsIn(['createdAt:asc', 'createdAt:desc', 'email:asc', 'email:desc'])
-  sort?: 'createdAt:asc' | 'createdAt:desc' | 'email:asc' | 'email:desc';
+  @IsIn(SORT_OPTIONS)
+  sort?: string;
 
   @IsOptional()
   @Type(() => Number)

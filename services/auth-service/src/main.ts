@@ -3,6 +3,9 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { ConfigService } from '@nestjs/config';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { AllExceptionFilter } from './common/filters/all-exeption.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -15,9 +18,92 @@ function normalizeOrigin(value: string): string {
     .replace(/\/$/, '');
 }
 
+function withTrailingSlash(url: string): string {
+  return url.endsWith('/') ? url : `${url}/`;
+}
+
+function createServiceProxy(targetBaseUrl: string) {
+  const targetBase = withTrailingSlash(targetBaseUrl);
+
+  return (req: Request, res: Response, next: NextFunction) => {
+    let targetUrl: URL;
+    try {
+      targetUrl = new URL(req.originalUrl, targetBase);
+    } catch {
+      next(new Error(`Invalid proxy target URL: ${targetBaseUrl}`));
+      return;
+    }
+
+    const transport = targetUrl.protocol === 'https:' ? httpsRequest : httpRequest;
+
+    const headers = { ...req.headers };
+    delete headers.host;
+    delete headers['content-length'];
+
+    const proxyReq = transport(
+      targetUrl,
+      {
+        method: req.method,
+        headers: {
+          ...headers,
+          host: targetUrl.host,
+          'x-forwarded-host': req.headers.host,
+          'x-forwarded-proto': req.protocol,
+          'x-forwarded-for': req.ip,
+        },
+      },
+      (proxyRes) => {
+        res.status(proxyRes.statusCode ?? 502);
+
+        for (const [header, value] of Object.entries(proxyRes.headers)) {
+          if (value === undefined) continue;
+          res.setHeader(header, value);
+        }
+
+        proxyRes.pipe(res);
+      },
+    );
+
+    proxyReq.on('error', (error) => {
+      if (res.headersSent) return;
+      res.status(502).json({
+        message: `Upstream service is unavailable: ${error.message}`,
+      });
+    });
+
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      proxyReq.end();
+      return;
+    }
+
+    // If body is already parsed by Nest/Express body parser, reconstruct it.
+    if (req.readableEnded) {
+      if (req.body !== undefined && req.body !== null) {
+        if (Buffer.isBuffer(req.body)) {
+          proxyReq.write(req.body);
+        } else if (typeof req.body === 'string') {
+          proxyReq.write(req.body);
+        } else {
+          proxyReq.write(JSON.stringify(req.body));
+        }
+      }
+
+      proxyReq.end();
+      return;
+    }
+
+    req.pipe(proxyReq);
+  };
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+  const userServiceUrl =
+    configService.get<string>('USER_SERVICE_URL') ?? 'http://localhost:3002';
+  const postServiceUrl =
+    configService.get<string>('POST_SERVICE_URL') ?? 'http://localhost:8002';
+
   app.useGlobalInterceptors(
     new LoggingInterceptor()
   );
@@ -70,6 +156,9 @@ async function bootstrap() {
     },
     credentials: true,
   });
+
+  app.use('/users', createServiceProxy(userServiceUrl));
+  app.use('/posts', createServiceProxy(postServiceUrl));
 
   await app.listen(process.env.PORT ?? 3000);
 }

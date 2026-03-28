@@ -24,10 +24,14 @@ exports.AppModule = AppModule = __decorate([
         imports: [
             config_1.ConfigModule.forRoot({
                 isGlobal: true,
-                envFilePath: [(0, path_1.resolve)(process.cwd(), "../../.env"), ".env"],
+                envFilePath: (0, path_1.resolve)(__dirname, "../../../.env"),
                 validationSchema: joi_1.default.object({
                     DATABASE_URL: joi_1.default.string().required(),
+                    USER_SERVICE_PORT: joi_1.default.number().port().default(3002),
+                    PORT: joi_1.default.number().port().optional(),
                     TCP_PORT: joi_1.default.number().port().default(4001),
+                    JWT_ACCESS_SECRET: joi_1.default.string().required(),
+                    CORS_ORIGIN: joi_1.default.string().default("http://localhost:5173"),
                 }),
             }),
             prisma_module_1.PrismaModule,

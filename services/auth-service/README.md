@@ -7,9 +7,10 @@
 Ключевые переменные:
 
 ```env
-PORT=3000
-USER_SERVICE_HOST=localhost
-USER_SERVICE_PORT=4001
+PORT=3001
+DATABASE_URL=postgresql://admin:admin@localhost:5432/backend_db
+JWT_ACCESS_SECRET=...
+JWT_REFRESH_SECRET=...
 CORS_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
 ```
 
@@ -28,10 +29,6 @@ npm run start:dev
 
 Swagger:
 
-- Auth сервис: <http://localhost:3000/docs>
+- Auth сервис: <http://localhost:3001/docs>
 
-Одна команда для запуска всего backend-стека (PostgreSQL + user-service + auth-service):
-
-```bash
-npm run up
-```
+`auth-service` отвечает только за `/auth/*` и не содержит доменных клиентов/контроллеров конкретных сервисов.

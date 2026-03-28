@@ -9,10 +9,14 @@ import { resolve } from "path";
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: [resolve(process.cwd(), "../../.env"), ".env"],
+      envFilePath: resolve(__dirname, "../../../.env"),
       validationSchema: Joi.object({
         DATABASE_URL: Joi.string().required(),
+        USER_SERVICE_PORT: Joi.number().port().default(3002),
+        PORT: Joi.number().port().optional(),
         TCP_PORT: Joi.number().port().default(4001),
+        JWT_ACCESS_SECRET: Joi.string().required(),
+        CORS_ORIGIN: Joi.string().default("http://localhost:5173"),
       }),
     }),
     PrismaModule,

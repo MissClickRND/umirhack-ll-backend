@@ -29,12 +29,16 @@ services:
       - ./.env
     environment:
       DATABASE_URL: ${DATABASE_URL_DOCKER}
+      PORT: ${USER_SERVICE_PORT}
       TCP_PORT: ${TCP_PORT}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN}
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "4001:4001"
+      - "${USER_SERVICE_PORT}:${USER_SERVICE_PORT}"
+      - "${TCP_PORT}:${TCP_PORT}"
 
   auth-service:
     build:
@@ -46,9 +50,9 @@ services:
       - ./.env
     environment:
       PORT: ${PORT}
-      USER_SERVICE_HOST: user-service
-      USER_SERVICE_PORT: ${USER_SERVICE_PORT}
       DATABASE_URL: ${DATABASE_URL_DOCKER}
+      USER_SERVICE_URL: http://user-service:${USER_SERVICE_PORT}
+      POST_SERVICE_URL: http://post-service:${POST_SERVICE_PORT}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       JWT_ACCESS_EXPIRES: ${JWT_ACCESS_EXPIRES}
@@ -60,10 +64,27 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      user-service:
-        condition: service_started
     ports:
-      - "3000:3000"
+      - "${PORT}:${PORT}"
+
+  post-service:
+    build:
+      context: ./services/post-service
+      dockerfile: Dockerfile
+    container_name: backend_post_service
+    restart: always
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL_DOCKER}
+      POST_SERVICE_PORT: ${POST_SERVICE_PORT}
+      AUTH_SERVICE_URL: http://auth-service:${PORT}
+    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${POST_SERVICE_PORT}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${POST_SERVICE_PORT}:${POST_SERVICE_PORT}"
 
 volumes:
   postgres_data:
