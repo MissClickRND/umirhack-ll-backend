@@ -1,16 +1,19 @@
 export function parseDurationMs(value: string): number {
-  const v = value.trim().toLowerCase();
+  const normalized = value.trim().toLowerCase();
 
-  // число без суффикса считаем секундами (как часто бывает в libs)
-  if (/^\d+$/.test(v)) return Number(v) * 1000;
+  if (/^\d+$/.test(normalized)) {
+    return Number(normalized) * 1000;
+  }
 
-  const m = v.match(/^(\d+)\s*(ms|s|m|h|d)$/);
-  if (!m) throw new Error(`Invalid duration: "${value}"`);
+  const match = normalized.match(/^(\d+)\s*(ms|s|m|h|d)$/);
+  if (!match) {
+    throw new Error(`Invalid duration: \"${value}\"`);
+  }
 
-  const n = Number(m[1]);
-  const unit = m[2];
+  const amount = Number(match[1]);
+  const unit = match[2];
 
-  const mult: Record<string, number> = {
+  const multiplierByUnit: Record<string, number> = {
     ms: 1,
     s: 1000,
     m: 60 * 1000,
@@ -18,5 +21,5 @@ export function parseDurationMs(value: string): number {
     d: 24 * 60 * 60 * 1000,
   };
 
-  return n * mult[unit];
+  return amount * multiplierByUnit[unit];
 }

@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common';
-import { PassportModule } from '@nestjs/passport';
-import { JwtModule } from '@nestjs/jwt';
-import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
-import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
-import { PrismaModule } from 'src/prisma/prisma.module';
+import { Module } from "@nestjs/common";
+import { JwtModule } from "@nestjs/jwt";
+import { PassportModule } from "@nestjs/passport";
+import { PrismaModule } from "../prisma/prisma.module";
+import { JwtAccessStrategy } from "./strategies/jwt-access.strategy";
+import { JwtRefreshStrategy } from "./strategies/jwt-refresh.strategy";
 
 @Module({
   imports: [PassportModule, JwtModule.register({}), PrismaModule],

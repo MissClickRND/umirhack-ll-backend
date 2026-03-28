@@ -1,251 +1,222 @@
-# Backend: запуск и развитие микросервисов
+# backnew microservices
 
-## 1. Состав backend
+Готовый production-oriented комплект микросервисов с единой авторизацией через httpOnly cookie, gateway-проксированием и общей конфигурацией из корневого `.env`.
 
-- auth-service (NestJS, HTTP, по умолчанию 3001, API gateway/proxy)
-- user-service (NestJS, HTTP 3002 + TCP 4001)
-- post-service (FastAPI, HTTP, по умолчанию 8002)
-- PostgreSQL (по умолчанию 5432)
+Хранилище данных:
 
-Все сервисы работают с общей БД backend_db.
+- `auth-service` (Nest) работает через Prisma 7 + PostgreSQL.
+- `posts-service` (Nest) работает через Prisma 7 + PostgreSQL.
+- `notes-service` (FastAPI) работает через PostgreSQL (SQLAlchemy).
+- Моков хранения данных нет.
 
-## 2. Что нужно перед запуском
+## Состав сервисов
 
-- Docker + Docker Compose
-- Node.js 20+ и npm
-- Файл backend/.env с переменными окружения
+- `auth-service` (NestJS): регистрация, логин, refresh, status, logout
+- `auth-gate` (NestJS): централизованная проверка access JWT
+- `posts-service` (NestJS): защищенный CRUD постов
+- `notes-service` (FastAPI): защищенный CRUD заметок
+- `auth-proxy` (Express): единая внешняя точка входа на `:3000`
+- `postgres` (PostgreSQL 17): единая БД с отдельными схемами (`auth`, `posts`, `notes`)
 
-Важно: все команды ниже выполняются из папки backend, если явно не сказано иное.
+## Конфигурация окружения
 
-## 3. Переменные окружения
+Все сервисы читают переменные из одного файла: `backnew/.env`.
 
-Сервисам нужен единый файл backend/.env.
+Минимально важные переменные:
 
-Минимальный набор переменных:
+- `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
+- `AUTH_DATABASE_URL`, `POSTS_DATABASE_URL`, `NOTES_DATABASE_URL`, `NOTES_DB_SCHEMA`
+- `JWT_SECRET`, `JWT_ISSUER`, `ACCESS_TOKEN_TTL`, `REFRESH_TOKEN_TTL`
+- `ACCESS_COOKIE_NAME`, `REFRESH_COOKIE_NAME`, `COOKIE_SECURE`, `COOKIE_SAME_SITE`, `COOKIE_DOMAIN`
+- `AUTH_SERVICE_URL`, `AUTH_GATE_URL`, `POSTS_SERVICE_URL`, `NOTES_SERVICE_URL`
+- `CORS_ORIGINS`, `CORS_CREDENTIALS`
+
+Пример:
 
 ```env
-POSTGRES_USER=admin
-POSTGRES_PASSWORD=admin
-POSTGRES_DB=backend_db
+NODE_ENV=development
 
-# Local development DB URL (when running services from host)
-DATABASE_URL=postgresql://admin:admin@localhost:5432/backend_db
+AUTH_PROXY_PORT=3000
+AUTH_SERVICE_PORT=3001
+AUTH_GATE_PORT=3002
+POSTS_SERVICE_PORT=3003
+NOTES_SERVICE_PORT=3004
+POSTGRES_PORT=5432
 
-# Docker-internal DB URL (when services run in docker compose)
-DATABASE_URL_DOCKER=postgresql://admin:admin@postgres:5432/backend_db
+POSTGRES_HOST=postgres
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=backnew
 
-PORT=3001
-USER_SERVICE_PORT=3002
-TCP_PORT=4001
-POST_SERVICE_PORT=8002
+AUTH_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/backnew?schema=auth
+POSTS_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/backnew?schema=posts
+NOTES_DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/backnew
+NOTES_DB_SCHEMA=notes
 
-USER_SERVICE_URL=http://localhost:3002
-POST_SERVICE_URL=http://localhost:8002
-AUTH_SERVICE_URL=http://localhost:3001
+AUTH_SERVICE_URL=http://auth-service:3001
+AUTH_GATE_URL=http://auth-gate:3002
+POSTS_SERVICE_URL=http://posts-service:3003
+NOTES_SERVICE_URL=http://notes-service:3004
 
-JWT_ACCESS_SECRET=access_secret_very_long
-JWT_REFRESH_SECRET=refresh_secret_very_long
+JWT_SECRET=super-secret-local-key
+JWT_ACCESS_SECRET=super-secret-local-key
+JWT_REFRESH_SECRET=super-secret-local-key
+JWT_ISSUER=backnew-auth
 JWT_ACCESS_EXPIRES=15m
 JWT_REFRESH_EXPIRES=7d
+ACCESS_TOKEN_TTL=15m
+REFRESH_TOKEN_TTL=7d
 
+ACCESS_COOKIE_NAME=access_token
+REFRESH_COOKIE_NAME=refresh_token
 COOKIE_SECURE=false
-COOKIE_SAMESITE=lax
+COOKIE_SAME_SITE=lax
+COOKIE_DOMAIN=
 
-# Comma-separated list for credentialed CORS
-CORS_ORIGIN=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002,http://localhost:8002,http://127.0.0.1:8002
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+CORS_CREDENTIALS=true
 
 ```
 
-## 4. Локальный запуск (dev)
+`CORS_ORIGINS` можно указать списком через запятую или `*`.
 
-### Рекомендуемый режим (гибрид)
+`AUTH_DATABASE_URL` должен указывать на `?schema=auth`.
+`POSTS_DATABASE_URL` должен указывать на `?schema=posts`.
+`NOTES_DATABASE_URL` использует ту же БД, а схема FastAPI выбирается через `NOTES_DB_SCHEMA` (обычно `notes`).
+
+## Запуск
+
+### DEV
 
 ```bash
-cd backend
-npm install
 npm run start:dev
 ```
 
-Что делает start:dev:
+Команда запускается из корня `backnew` и поднимает все сервисы с live-reload и готовой БД.
 
-- останавливает контейнеры auth-service, user-service, post-service (если были запущены)
-- поднимает PostgreSQL в Docker
-- генерирует Prisma Client в Nest-сервисах
-- запускает post-service в Docker c reload
-- запускает auth-service и user-service локально в watch-режиме
-
-Остановка dev-режима:
-
-1. Нажать Ctrl+C в терминале, где запущен start:dev
-2. Остановить контейнеры и БД:
+Эквивалент напрямую через docker compose:
 
 ```bash
-cd backend
-npm run containers:stop-services
-npm run db:down
+docker compose -f docker-compose.dev.yml up --build
 ```
 
-## 5. Прод-запуск (docker compose)
+### PROD
 
 ```bash
-cd backend
-npm install
-npm run start:prod
+docker compose up --build -d
 ```
 
-Это поднимет все сервисы из docker-compose.yml в фоне.
+PROD также сам инициализирует Prisma-клиенты и синхронизирует схемы Nest-сервисов.
 
-Остановка:
+### Остановка
 
 ```bash
-cd backend
+npm run stop:dev
+```
+
+Для остановки production-стека:
+
+```bash
 npm run stop:prod
 ```
 
-## 6. Проверка после запуска
+## Swagger
 
-Frontend должен ходить на `http://localhost:3001`.
+Внешний Swagger gateway (основной для клиентов):
 
-Auth-service на порту 3001 работает как gateway/proxy:
+- `http://localhost:3000/docs`
 
-- `/auth/*` обслуживается самим auth-service
-- `/users/*` проксируется в user-service
-- `/posts/*` проксируется в post-service
+## Prisma и PostgreSQL
 
-- Auth Swagger: http://localhost:3001/docs
-- User Swagger: http://localhost:3002/docs
-- Post Swagger: http://localhost:8002/docs
-- Post health: http://localhost:8002/health
+Для Nest-сервисов Prisma синхронизация запускается автоматически:
 
-Логи контейнеров (для прод-режима):
+- `prisma generate`
+- `prisma db push`
 
-```bash
-cd backend
-docker compose logs -f auth-service
-docker compose logs -f user-service
-docker compose logs -f post-service
-```
+Это выполняется в `start:dev` и `start:prod` у `auth-service` и `posts-service`.
 
-## 7. Prisma: как запускать миграции и генерацию
+Для FastAPI `notes-service` таблицы создаются автоматически при старте приложения.
 
-Сейчас единая схема призмы для nest
-
-- `backend/prisma/schema.prisma`
-
-`auth-service` и `user-service` генерируют клиент из локальных `prisma/schema.prisma`,
-но эти файлы автоматически синхронизируются из `backend/prisma/schema.prisma`
-скриптом оркестратора перед `prisma:generate`, `prisma:migrate:dev` и `prisma:reset`.
-
-Команды оркестрации Prisma из папки `backend`:
+Если нужно сбросить локальные данные PostgreSQL:
 
 ```bash
-cd backend
-npm run prisma:generate
-npm run prisma:migrate:dev -- --name add_some_feature
-npm run prisma:reset
+docker compose down -v
 ```
 
-Прямой вызов оркестратора (эквивалентно):
+## Как добавить новый микросервис
 
-```bash
-cd backend
-node ./scripts/prisma-orchestrator.mjs generate
-node ./scripts/prisma-orchestrator.mjs migrate-dev --name add_some_feature
-node ./scripts/prisma-orchestrator.mjs reset
-```
+Ниже рабочий шаблон именно для этого репозитория: сервис поднимается в `docker-compose`, проксируется через `auth-proxy` и появляется в gateway Swagger.
 
-Если запускаешь из корня репозитория:
+### 1) Общий чеклист (для любого стека)
 
-```bash
-npm --prefix backend run prisma:generate
-npm --prefix backend run prisma:migrate:dev -- --name add_some_feature
-npm --prefix backend run prisma:reset
-```
+- Создай папку `services/<service-name>`.
+- Добавь сервис в `docker-compose.dev.yml` и `docker-compose.yml`:
+  - `build.context: ./services/<service-name>`
+  - `build.target: development` для dev и `production` для prod
+  - `env_file: ./.env`
+  - `environment` с `PORT: ${<SERVICE>_PORT:-30xx}`
+  - `expose` с внутренним портом сервиса
+  - для dev: `command` и `volumes` (по аналогии с текущими сервисами)
+  - если нужна БД: `depends_on.postgres.condition: service_healthy`
+- Добавь переменные в `.env` и `.env.example`:
+  - `<SERVICE>_PORT=30xx`
+  - `<SERVICE>_URL=http://<service-name>:30xx`
+  - при БД: `<SERVICE>_DATABASE_URL=...` и/или `<SERVICE>_DB_SCHEMA=...`
+- Подключи URL нового сервиса в `auth-proxy` (оба compose-файла, секция `auth-proxy.environment`) и добавь сервис в `auth-proxy.depends_on`.
+- Обнови `services/auth-proxy/src/index.js`:
+  - добавь новую переменную URL сервиса из env
+  - добавь запись в `GET /docs/services`
+  - добавь проксирование `/docs/<service-name>/openapi.json`
+  - добавь проксирование бизнес-маршрута, обычно `/api/<resource>` (с `verifyAccess`, если маршрут защищенный)
+- Обнови этот README: `Состав сервисов`, `Swagger`, `Внешние API через порт 3000`, `smoke-test`.
 
-Важно: в shared БД только один сервис должен быть migration owner.
-Важно: изменения структуры БД вносятся только в `backend/prisma/schema.prisma`, а не в сервисные копии.
-Важно: `prisma:reset` удаляет данные в dev-БД и заново применяет миграции owner-сервиса.
-Важно: не запускать `npx prisma:generate` (это не команда Prisma CLI и завершится ошибкой).
+### 2) Шаблон для NestJS сервиса
 
-## 8. Как добавить новый Nest-сервис
+- Удобная база:
+  - `services/posts-service` — если нужен Prisma + PostgreSQL
+  - `services/auth-gate` — если сервис без БД
+- В `src/main.ts` обязательно оставь:
+  - CORS на `CORS_ORIGINS` и `CORS_CREDENTIALS`
+  - Swagger на `/docs` и `openapi.json` (gateway подтягивает именно `/openapi.json`)
+  - запуск на `0.0.0.0` и порт из `PORT`
+- Если используешь Prisma:
+  - добавь `prisma/schema.prisma` с отдельной схемой БД (например `?schema=<service_schema>`)
+  - оставь скрипты `prisma:generate` и `prisma:push` в `package.json`
+  - вызывай их в `start:dev` и `start:prod` (как в `posts-service`)
+- Для защищенных роутов принимай user-context из заголовков `x-user-id`, `x-user-email`, `x-user-role`.
+- Роуты внутри сервиса делай без `/api` (например `/orders`), а префикс `/api` добавляй на уровне `auth-proxy`.
 
-Ниже чеклист, чтобы сервис запускался и локально, и в проде.
+### 3) Шаблон для Python/FastAPI сервиса
 
-1. Создать сервис в backend/services/new-nest-service с базовой Nest-структурой:
-   - package.json
-   - src/main.ts
-   - src/app.module.ts
-   - Dockerfile
+- Удобная база: `services/notes-service`.
+- Минимальный каркас:
+  - `app/main.py` с `docs_url="/docs"` и `openapi_url="/openapi.json"`
+  - `app/routers/health.py` с `GET /health`
+  - router для бизнес-логики (например `/orders`)
+  - CORS на основе `CORS_ORIGINS` и `CORS_CREDENTIALS`
+- Для защищенных роутов добавь dependency по аналогии с `app/deps.py`, которая валидирует `x-user-id`.
+- Если нужна БД:
+  - вынеси конфиг в `app/config.py`
+  - инициализируй подключение/таблицы в startup
+  - используй отдельную схему через переменную `<SERVICE>_DB_SCHEMA` (если используешь схемы)
+- Команды в compose:
+  - dev: `uvicorn app.main:app --host 0.0.0.0 --port ${<SERVICE>_PORT:-30xx} --reload`
+  - prod: `uvicorn app.main:app --host 0.0.0.0 --port ${<SERVICE>_PORT:-30xx}`
 
-2. Настроить чтение общего env из backend/.env в ConfigModule.
+### 4) Проверка после подключения
 
-3. Добавить сервис в backend/docker-compose.yml:
-   - build context: ./services/new-nest-service
-   - env_file: ./.env
-   - нужные environment-переменные
-   - ports
-   - depends_on postgres (health)
+- Запусти `npm run start:dev`.
+- Проверь `http://localhost:3000/docs/services` — там должен появиться новый сервис.
+- Проверь `http://localhost:3000/docs/<service-name>/openapi.json`.
+- Прогоняй health и основной CRUD через gateway-маршрут.
 
-4. Если сервис должен запускаться в гибридном dev-режиме локально:
-   - обновить script dev:services в backend/package.json
-   - добавить команду вида npm --prefix ./services/new-nest-service run start:dev
+## Важно
 
-5. Если сервис использует Prisma:
-   - использовать общую схему `backend/prisma/schema.prisma`
-   - добавить его в backend/scripts/prisma-orchestrator.mjs в массив services
-   - migrationOwner ставить true только у одного сервиса
-
-6. Если сервис предоставляет HTTP API:
-   - добавить Swagger в main.ts
-   - проверить endpoint /docs
-
-7. Обновить backend/.env новыми переменными порта/секретов.
-
-8. Проверить запуск:
-   - npm run start:dev
-   - npm run start:prod
-
-## 9. Как добавить новый Python-сервис (FastAPI)
-
-1. Создать структуру backend/services/new-python-service:
-   - app/main.py
-   - requirements.txt
-   - Dockerfile
-   - (опционально) app/models.py, app/db.py, app/schemas.py
-
-2. В main.py сделать минимум:
-   - health endpoint (/health)
-   - базовые роуты домена
-
-3. Добавить сервис в backend/docker-compose.yml:
-   - build context: ./services/new-python-service
-   - env_file: ./.env
-   - command: uvicorn app.main:app --host 0.0.0.0 --port ${YOUR_PORT}
-   - ports
-   - depends_on postgres (health), если нужен доступ к БД
-
-4. Для удобной локальной разработки через Docker + reload добавить override в backend/docker-compose.dev.yml:
-   - volume ./services/new-python-service:/app
-   - command с --reload
-
-5. Если сервис должен проверять авторизацию через auth-service:
-   - использовать AUTH_SERVICE_URL
-   - для prod (внутри docker network): http://auth-service:${PORT}
-   - для dev-гибрида (контейнер -> локальный auth): http://host.docker.internal:${PORT}
-
-6. Подключить запуск в scripts backend/package.json:
-   - по аналогии с dev:post, если сервис нужен в start:dev
-
-7. Проверить запуск:
-   - docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build new-python-service
-   - открыть /health и /docs
-
-## 10. Мини-чеклист подключения любого нового сервиса
-
-- Есть папка сервиса в backend/services
-- Есть Dockerfile
-- Добавлен в docker-compose.yml
-- Добавлен в docker-compose.dev.yml (если нужен reload/dev override)
-- Добавлены переменные в backend/.env
-- Обновлены scripts в backend/package.json (если нужен в start:dev)
-- Обновлен README сервиса и backend/README.md
+- Наружу проброшен только `3000`.
+- Все защищенные роуты проходят через `auth-proxy` и `auth-gate`.
+- Для production обязательно замени:
+  - `JWT_SECRET`
+  - `POSTGRES_PASSWORD`
+  - `COOKIE_SECURE=true` (при HTTPS)
+  - при необходимости `COOKIE_SAME_SITE` и `COOKIE_DOMAIN`
+  - список `CORS_ORIGINS`

@@ -1,21 +1,17 @@
-import type { Response } from 'express';
+import type { Response } from "express";
 
-export type CookieOptionsShape = {
-  httpOnly: boolean;
-  secure: boolean;
-  sameSite: 'lax' | 'strict' | 'none';
-  path?: string;
-  maxAge: number;
-};
+export type CookieSameSite = "lax" | "strict" | "none";
 
 export function setAuthCookies(params: {
   res: Response;
   accessToken: string;
   refreshToken: string;
   secure: boolean;
-  sameSite: 'lax' | 'strict' | 'none';
+  sameSite: CookieSameSite;
   accessMaxAgeMs: number;
   refreshMaxAgeMs: number;
+  accessCookieName: string;
+  refreshCookieName: string;
 }) {
   const {
     res,
@@ -25,42 +21,47 @@ export function setAuthCookies(params: {
     sameSite,
     accessMaxAgeMs,
     refreshMaxAgeMs,
+    accessCookieName,
+    refreshCookieName,
   } = params;
 
-  res.cookie('accessToken', accessToken, {
+  res.cookie(accessCookieName, accessToken, {
     httpOnly: true,
     secure,
     sameSite,
-    path: '/', // access нужен на все запросы
+    path: "/",
     maxAge: accessMaxAgeMs,
   });
 
-  res.cookie('refreshToken', refreshToken, {
+  res.cookie(refreshCookieName, refreshToken, {
     httpOnly: true,
     secure,
     sameSite,
-    // Часто refresh ограничивают только auth-роутами:
-    path: '/auth',
+    path: "/auth",
     maxAge: refreshMaxAgeMs,
   });
 }
 
-export function clearAuthCookies(
-  res: Response,
-  params: { secure: boolean; sameSite: 'lax' | 'strict' | 'none' },
-) {
-  const { secure, sameSite } = params;
+export function clearAuthCookies(params: {
+  res: Response;
+  secure: boolean;
+  sameSite: CookieSameSite;
+  accessCookieName: string;
+  refreshCookieName: string;
+}) {
+  const { res, secure, sameSite, accessCookieName, refreshCookieName } = params;
 
-  res.clearCookie('accessToken', {
+  res.clearCookie(accessCookieName, {
     httpOnly: true,
     secure,
     sameSite,
-    path: '/',
+    path: "/",
   });
-  res.clearCookie('refreshToken', {
+
+  res.clearCookie(refreshCookieName, {
     httpOnly: true,
     secure,
     sameSite,
-    path: '/auth',
+    path: "/auth",
   });
 }

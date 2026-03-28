@@ -1,7 +1,7 @@
-export type Role = 'ADMIN' | 'WAITER' | 'COOK' | 'CUSTOMER';
+export type Role = string;
 
 export type AuthUser = {
-  userId: number;
+  userId: string;
   email: string;
   role: Role;
 };

@@ -1,90 +1,110 @@
+name: backnew-prod
+
 services:
   postgres:
-    image: postgres:15
-    container_name: backend_postgres
-    restart: always
+    image: postgres:17-alpine
     env_file:
       - ./.env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-backnew}
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d backend_db"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-backnew}",
+        ]
       interval: 5s
       timeout: 5s
-      retries: 10
-
-  user-service:
-    build:
-      context: ./services/user-service
-      dockerfile: Dockerfile
-    container_name: backend_user_service
-    restart: always
-    env_file:
-      - ./.env
-    environment:
-      DATABASE_URL: ${DATABASE_URL_DOCKER}
-      PORT: ${USER_SERVICE_PORT}
-      TCP_PORT: ${TCP_PORT}
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
-      CORS_ORIGIN: ${CORS_ORIGIN}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - "${USER_SERVICE_PORT}:${USER_SERVICE_PORT}"
-      - "${TCP_PORT}:${TCP_PORT}"
+      retries: 20
+    restart: unless-stopped
 
   auth-service:
     build:
       context: ./services/auth-service
-      dockerfile: Dockerfile
-    container_name: backend_auth_service
-    restart: always
+      target: production
     env_file:
       - ./.env
     environment:
-      PORT: ${PORT}
-      DATABASE_URL: ${DATABASE_URL_DOCKER}
-      USER_SERVICE_URL: http://user-service:${USER_SERVICE_PORT}
-      POST_SERVICE_URL: http://post-service:${POST_SERVICE_PORT}
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      JWT_ACCESS_EXPIRES: ${JWT_ACCESS_EXPIRES}
-      JWT_REFRESH_EXPIRES: ${JWT_REFRESH_EXPIRES}
-      COOKIE_SECURE: ${COOKIE_SECURE}
-      COOKIE_SAMESITE: ${COOKIE_SAMESITE}
-      CORS_ORIGIN: ${CORS_ORIGIN}
-    command: sh -c "npx prisma migrate deploy && node dist/main"
+      PORT: ${AUTH_SERVICE_PORT:-3001}
+      DATABASE_URL: ${AUTH_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/backnew?schema=auth}
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "${PORT}:${PORT}"
+    expose:
+      - "3001"
+    restart: unless-stopped
 
-  post-service:
+  auth-gate:
     build:
-      context: ./services/post-service
-      dockerfile: Dockerfile
-    container_name: backend_post_service
-    restart: always
+      context: ./services/auth-gate
+      target: production
     env_file:
       - ./.env
     environment:
-      DATABASE_URL: ${DATABASE_URL_DOCKER}
-      POST_SERVICE_PORT: ${POST_SERVICE_PORT}
-      AUTH_SERVICE_URL: http://auth-service:${PORT}
-    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${POST_SERVICE_PORT}"
+      PORT: ${AUTH_GATE_PORT:-3002}
+    expose:
+      - "3002"
+    restart: unless-stopped
+
+  posts-service:
+    build:
+      context: ./services/posts-service
+      target: production
+    env_file:
+      - ./.env
+    environment:
+      PORT: ${POSTS_SERVICE_PORT:-3003}
+      DATABASE_URL: ${POSTS_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/backnew?schema=posts}
     depends_on:
       postgres:
         condition: service_healthy
+    expose:
+      - "3003"
+    restart: unless-stopped
+
+  notes-service:
+    build:
+      context: ./services/notes-service
+      target: production
+    env_file:
+      - ./.env
+    environment:
+      PORT: ${NOTES_SERVICE_PORT:-3004}
+      NOTES_DATABASE_URL: ${NOTES_DATABASE_URL:-postgresql+psycopg2://postgres:postgres@postgres:5432/backnew}
+      NOTES_DB_SCHEMA: ${NOTES_DB_SCHEMA:-notes}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "3004"
+    restart: unless-stopped
+
+  auth-proxy:
+    build:
+      context: ./services/auth-proxy
+      target: production
+    env_file:
+      - ./.env
+    environment:
+      PORT: 3000
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:3001}
+      AUTH_GATE_URL: ${AUTH_GATE_URL:-http://auth-gate:3002}
+      POSTS_SERVICE_URL: ${POSTS_SERVICE_URL:-http://posts-service:3003}
+      NOTES_SERVICE_URL: ${NOTES_SERVICE_URL:-http://notes-service:3004}
+    depends_on:
+      - auth-service
+      - auth-gate
+      - posts-service
+      - notes-service
     ports:
-      - "${POST_SERVICE_PORT}:${POST_SERVICE_PORT}"
+      - "${AUTH_PROXY_PORT:-3000}:3000"
+    restart: unless-stopped
 
 volumes:
   postgres_data:

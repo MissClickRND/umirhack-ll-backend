@@ -1,166 +1,261 @@
-import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import cookieParser from 'cookie-parser';
-import { ConfigService } from '@nestjs/config';
-import { request as httpRequest } from 'node:http';
-import { request as httpsRequest } from 'node:https';
-import type { NextFunction, Request, Response } from 'express';
-import { AppModule } from './app.module';
-import { AllExceptionFilter } from './common/filters/all-exeption.filter';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
-import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  ValidationPipe,
+} from "@nestjs/common";
+import { NestFactory } from "@nestjs/core";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import cookieParser from "cookie-parser";
+import { AppModule } from "./app.module";
 
-function normalizeOrigin(value: string): string {
-  return value
-    .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '')
-    .trim()
-    .replace(/\/$/, '');
+function parseCorsOrigins(raw: string | undefined): string[] {
+  if (!raw) {
+    return ["http://localhost:5173", "http://localhost:3000"];
+  }
+
+  return raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
-function withTrailingSlash(url: string): string {
-  return url.endsWith('/') ? url : `${url}/`;
+function parseCorsCredentials(raw: string | undefined): boolean {
+  return (raw ?? "true").toLowerCase() === "true";
 }
 
-function createServiceProxy(targetBaseUrl: string) {
-  const targetBase = withTrailingSlash(targetBaseUrl);
+function toRussianHttpError(statusCode: number): string {
+  switch (statusCode) {
+    case HttpStatus.BAD_REQUEST:
+      return "Неверный запрос";
+    case HttpStatus.UNAUTHORIZED:
+      return "Не авторизован";
+    case HttpStatus.FORBIDDEN:
+      return "Доступ запрещен";
+    case HttpStatus.NOT_FOUND:
+      return "Не найдено";
+    case HttpStatus.CONFLICT:
+      return "Конфликт";
+    case HttpStatus.UNPROCESSABLE_ENTITY:
+      return "Ошибка валидации";
+    default:
+      return "Внутренняя ошибка сервера";
+  }
+}
 
-  return (req: Request, res: Response, next: NextFunction) => {
-    let targetUrl: URL;
-    try {
-      targetUrl = new URL(req.originalUrl, targetBase);
-    } catch {
-      next(new Error(`Invalid proxy target URL: ${targetBaseUrl}`));
-      return;
-    }
+@Catch()
+class RussianHttpExceptionFilter implements ExceptionFilter {
+  catch(exception: unknown, host: ArgumentsHost): void {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse();
 
-    const transport = targetUrl.protocol === 'https:' ? httpsRequest : httpRequest;
+    if (exception instanceof HttpException) {
+      const statusCode = exception.getStatus();
+      const payload = exception.getResponse();
 
-    const headers = { ...req.headers };
-    delete headers.host;
-    delete headers['content-length'];
-
-    const proxyReq = transport(
-      targetUrl,
-      {
-        method: req.method,
-        headers: {
-          ...headers,
-          host: targetUrl.host,
-          'x-forwarded-host': req.headers.host,
-          'x-forwarded-proto': req.protocol,
-          'x-forwarded-for': req.ip,
-        },
-      },
-      (proxyRes) => {
-        res.status(proxyRes.statusCode ?? 502);
-
-        for (const [header, value] of Object.entries(proxyRes.headers)) {
-          if (value === undefined) continue;
-          res.setHeader(header, value);
+      let message: string | string[] = exception.message;
+      if (typeof payload === "string") {
+        message = payload;
+      } else if (payload && typeof payload === "object") {
+        const candidate = (payload as { message?: string | string[] }).message;
+        if (candidate) {
+          message = candidate;
         }
+      }
 
-        proxyRes.pipe(res);
-      },
-    );
-
-    proxyReq.on('error', (error) => {
-      if (res.headersSent) return;
-      res.status(502).json({
-        message: `Upstream service is unavailable: ${error.message}`,
+      response.status(statusCode).json({
+        statusCode,
+        message,
+        error: toRussianHttpError(statusCode),
       });
+      return;
+    }
+
+    response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+      message: "Внутренняя ошибка сервера",
+      error: toRussianHttpError(HttpStatus.INTERNAL_SERVER_ERROR),
     });
-
-    if (req.method === 'GET' || req.method === 'HEAD') {
-      proxyReq.end();
-      return;
-    }
-
-    // If body is already parsed by Nest/Express body parser, reconstruct it.
-    if (req.readableEnded) {
-      if (req.body !== undefined && req.body !== null) {
-        if (Buffer.isBuffer(req.body)) {
-          proxyReq.write(req.body);
-        } else if (typeof req.body === 'string') {
-          proxyReq.write(req.body);
-        } else {
-          proxyReq.write(JSON.stringify(req.body));
-        }
-      }
-
-      proxyReq.end();
-      return;
-    }
-
-    req.pipe(proxyReq);
-  };
+  }
 }
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  const configService = app.get(ConfigService);
-  const userServiceUrl =
-    configService.get<string>('USER_SERVICE_URL') ?? 'http://localhost:3002';
-  const postServiceUrl =
-    configService.get<string>('POST_SERVICE_URL') ?? 'http://localhost:8002';
+function enrichAuthSwaggerDocument(document: Record<string, any>): void {
+  document.components ??= {};
+  document.components.schemas ??= {};
 
-  app.useGlobalInterceptors(
-    new LoggingInterceptor()
-  );
-  app.useGlobalFilters(new AllExceptionFilter());
-
-  app.use(cookieParser());
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true, // выкидывает лишние поля
-      forbidNonWhitelisted: true, // если пришли лишние поля — 400
-      transform: true, // превращает строки в нужные типы (если возможно)
-    }),
-  );
-
-  const config = new DocumentBuilder()
-    .setTitle('Auth Service API')
-    .setDescription('Authentication microservice API')
-    .setVersion('1.0')
-    .addCookieAuth('accessToken')
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document);
-
-  const originsRaw =
-    configService.get<string>('CORS_ORIGIN') ??
-    'http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000';
-  const allowedOrigins = new Set(
-    originsRaw
-    .split(',')
-      .map((origin) => normalizeOrigin(origin))
-      .filter(Boolean),
-  );
-
-  app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-
-      const normalizedOrigin = normalizeOrigin(origin);
-
-      if (allowedOrigins.has(normalizedOrigin)) {
-        callback(null, true);
-        return;
-      }
-
-      callback(new Error(`CORS blocked for origin: ${normalizedOrigin}`), false);
+  document.components.schemas.UserPublic = {
+    type: "object",
+    properties: {
+      id: { type: "string", example: "clx0000000000abc123" },
+      email: { type: "string", format: "email", example: "user@test.dev" },
+      name: { type: "string", example: "User" },
+      role: { type: "string", example: "user" },
+      createdAt: { type: "string", format: "date-time" },
     },
-    credentials: true,
+  };
+
+  document.components.schemas.AuthUserResponse = {
+    type: "object",
+    properties: {
+      user: { $ref: "#/components/schemas/UserPublic" },
+    },
+  };
+
+  document.components.schemas.AuthStatusResponse = {
+    type: "object",
+    properties: {
+      authenticated: { type: "boolean", example: true },
+      user: { $ref: "#/components/schemas/UserPublic" },
+    },
+  };
+
+  document.components.schemas.OkResponse = {
+    type: "object",
+    properties: {
+      ok: { type: "boolean", example: true },
+    },
+  };
+
+  document.components.schemas.HealthResponse = {
+    type: "object",
+    properties: {
+      service: { type: "string", example: "auth-service" },
+      status: { type: "string", example: "ok" },
+    },
+  };
+
+  document.components.schemas.ErrorResponse = {
+    type: "object",
+    properties: {
+      message: {
+        oneOf: [
+          { type: "string" },
+          {
+            type: "array",
+            items: { type: "string" },
+          },
+        ],
+        example: "Пользователь не найден",
+      },
+      error: { type: "string", example: "Неверный запрос" },
+      statusCode: { type: "integer", example: 400 },
+    },
+  };
+
+  const withJson = (schemaRef: string, description: string) => ({
+    description,
+    content: {
+      "application/json": {
+        schema: { $ref: schemaRef },
+      },
+    },
   });
 
-  app.use('/users', createServiceProxy(userServiceUrl));
-  app.use('/posts', createServiceProxy(postServiceUrl));
+  const setResponses = (
+    path: string,
+    method: string,
+    responses: Record<string, any>,
+  ) => {
+    const operation = document.paths?.[path]?.[method];
+    if (!operation) {
+      return;
+    }
 
-  await app.listen(process.env.PORT ?? 3000);
+    operation.responses = {
+      ...(operation.responses ?? {}),
+      ...responses,
+    };
+  };
+
+  setResponses("/auth/register", "post", {
+    "201": withJson(
+      "#/components/schemas/AuthUserResponse",
+      "Пользователь зарегистрирован",
+    ),
+    "400": withJson(
+      "#/components/schemas/ErrorResponse",
+      "Ошибка валидации или бизнес-логики",
+    ),
+  });
+
+  setResponses("/auth/login", "post", {
+    "201": withJson(
+      "#/components/schemas/AuthUserResponse",
+      "Пользователь вошел в систему",
+    ),
+    "400": withJson(
+      "#/components/schemas/ErrorResponse",
+      "Неверные учетные данные или ошибка валидации",
+    ),
+  });
+
+  setResponses("/auth/refresh", "post", {
+    "201": withJson(
+      "#/components/schemas/AuthUserResponse",
+      "Токены обновлены",
+    ),
+    "401": withJson(
+      "#/components/schemas/ErrorResponse",
+      "Недействительный токен обновления",
+    ),
+    "403": withJson("#/components/schemas/ErrorResponse", "Доступ запрещен"),
+  });
+
+  setResponses("/auth/status", "get", {
+    "200": withJson(
+      "#/components/schemas/AuthStatusResponse",
+      "Текущий статус авторизации",
+    ),
+    "401": withJson("#/components/schemas/ErrorResponse", "Не авторизован"),
+  });
+
+  setResponses("/auth/logout", "post", {
+    "201": withJson("#/components/schemas/OkResponse", "Выход выполнен"),
+    "401": withJson("#/components/schemas/ErrorResponse", "Не авторизован"),
+  });
+
+  setResponses("/auth/health", "get", {
+    "200": withJson("#/components/schemas/HealthResponse", "Состояние сервиса"),
+  });
 }
 
-bootstrap();
+async function bootstrap(): Promise<void> {
+  const app = await NestFactory.create(AppModule);
+  app.useGlobalFilters(new RussianHttpExceptionFilter());
+  app.use(cookieParser());
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+
+  const corsOrigins = parseCorsOrigins(process.env.CORS_ORIGINS);
+  app.enableCors({
+    origin: corsOrigins.includes("*") ? true : corsOrigins,
+    credentials: parseCorsCredentials(process.env.CORS_CREDENTIALS),
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  });
+
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle("API сервиса авторизации")
+    .setDescription(
+      "Сервис авторизации (регистрация, вход, обновление токенов, статус, выход)",
+    )
+    .setVersion("1.0.0")
+    .addCookieAuth("access_token", undefined, "access-cookie")
+    .addCookieAuth("refresh_token", undefined, "refresh-cookie")
+    .addBearerAuth(undefined, "access-token")
+    .build();
+
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  enrichAuthSwaggerDocument(swaggerDocument as Record<string, any>);
+  SwaggerModule.setup("docs", app, swaggerDocument, {
+    customSiteTitle: "Swagger сервиса авторизации",
+    jsonDocumentUrl: "openapi.json",
+    yamlDocumentUrl: "openapi.yaml",
+  });
+
+  const port = Number(process.env.PORT ?? 3001);
+  await app.listen(port, "0.0.0.0");
+}
+
+void bootstrap();

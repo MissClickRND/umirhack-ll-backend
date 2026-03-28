@@ -1,20 +1,11 @@
 {
-  "name": "umirhack-backend",
+  "name": "backnew",
   "private": true,
+  "version": "1.0.0",
   "scripts": {
-    "db:up": "docker compose up -d postgres",
-    "db:down": "docker compose stop postgres",
-    "containers:stop-services": "docker compose stop auth-service user-service post-service",
-    "prisma:generate": "node ./scripts/prisma-orchestrator.mjs generate",
-    "prisma:migrate:dev": "node ./scripts/prisma-orchestrator.mjs migrate-dev",
-    "prisma:reset": "node ./scripts/prisma-orchestrator.mjs reset",
-    "dev:post": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build post-service",
-    "dev:services": "concurrently -k -n USER,AUTH -c cyan,magenta \"npm --prefix ./services/user-service run start:dev\" \"npm --prefix ./services/auth-service run start:dev\"",
-    "start:dev": "npm run containers:stop-services && npm run db:up && npm run prisma:generate && npm run dev:post && npm run dev:services",
-    "start:prod": "docker compose up -d --build",
+    "start:dev": "docker compose -f docker-compose.dev.yml up --build",
+    "stop:dev": "docker compose -f docker-compose.dev.yml down",
+    "start:prod": "docker compose up --build -d",
     "stop:prod": "docker compose down"
-  },
-  "devDependencies": {
-    "concurrently": "^9.2.1"
   }
 }

@@ -1,64 +1,104 @@
+import { Body, Controller, Get, Post, Res, UseGuards } from "@nestjs/common";
 import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  Req,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { ConfigService } from '@nestjs/config';
-import { RegisterDto } from './dto/register.dto';
-import { clearAuthCookies, setAuthCookies } from './auth.cookies';
-import { JwtAccessGuard } from './guards/jwt-access.guard';
-import type { Request, Response } from 'express';
-import { parseDurationMs } from './utils/parse-duration-ms';
-import { CurrentUser } from './decorators/current-user.decorator';
-import type { AuthUser, AuthUserWithRefresh } from './types/auth-user.type';
-import { ApiBearerAuth, ApiCookieAuth, ApiTags } from '@nestjs/swagger';
-import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
-import { Public } from './decorators/public.decorator';
-import { Throttle } from '@nestjs/throttler';
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiCookieAuth,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiOkResponse,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from "@nestjs/swagger";
+import type { Response } from "express";
+import { clearAuthCookies, setAuthCookies } from "./auth.cookies";
+import { CurrentUser } from "./decorators/current-user.decorator";
+import { Public } from "./decorators/public.decorator";
+import { LoginDto } from "./dto/login.dto";
+import { RegisterDto } from "./dto/register.dto";
+import { JwtRefreshGuard } from "./guards/jwt-refresh.guard";
+import type { AuthUser, AuthUserWithRefresh } from "./types/auth-user.type";
+import { parseDurationMs } from "./utils/parse-duration-ms";
+import { AuthService } from "./auth.service";
 
-@ApiTags('auth')
-@Controller('auth')
+const swaggerUserSchema = {
+  type: "object",
+  properties: {
+    id: { type: "string", example: "clx0000000000abc123" },
+    email: { type: "string", format: "email", example: "user@test.dev" },
+    name: { type: "string", example: "User" },
+    role: { type: "string", example: "user" },
+    createdAt: { type: "string", format: "date-time" },
+  },
+} as const;
+
+const swaggerAuthUserResponseSchema = {
+  type: "object",
+  properties: {
+    user: swaggerUserSchema,
+  },
+} as const;
+
+const swaggerStatusResponseSchema = {
+  type: "object",
+  properties: {
+    authenticated: { type: "boolean", example: true },
+    user: swaggerUserSchema,
+  },
+} as const;
+
+const swaggerOkResponseSchema = {
+  type: "object",
+  properties: {
+    ok: { type: "boolean", example: true },
+  },
+} as const;
+
+const swaggerHealthResponseSchema = {
+  type: "object",
+  properties: {
+    service: { type: "string", example: "auth-service" },
+    status: { type: "string", example: "ok" },
+  },
+} as const;
+
+const swaggerErrorResponseSchema: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    message: {
+      oneOf: [
+        { type: "string" },
+        {
+          type: "array",
+          items: { type: "string" },
+        },
+      ],
+      example: "Пользователь не найден",
+    },
+    error: { type: "string", example: "Неверный запрос" },
+    statusCode: { type: "number", example: 400 },
+  },
+};
+
+@ApiTags("auth")
+@Controller("auth")
 export class AuthController {
-  constructor(
-    private readonly auth: AuthService,
-    private readonly config: ConfigService,
-  ) {}
-
-  private cookieSecure() {
-    return (this.config.get<string>('COOKIE_SECURE') ?? 'false') === 'true';
-  }
-
-  private cookieSameSite(): 'lax' | 'strict' | 'none' {
-    const v = (
-      this.config.get<string>('COOKIE_SAMESITE') ?? 'lax'
-    ).toLowerCase();
-    if (v === 'none' || v === 'strict' || v === 'lax') return v;
-    return 'lax';
-  }
-
-  private accessMaxAgeMs() {
-    const v = this.config.get<string>('JWT_ACCESS_EXPIRES') ?? '15m';
-    return parseDurationMs(v);
-  }
-
-  private refreshMaxAgeMs() {
-    const v = this.config.get<string>('JWT_REFRESH_EXPIRES') ?? '7d';
-    return parseDurationMs(v);
-  }
+  constructor(private readonly authService: AuthService) {}
 
   @Public()
-  @Post('register')
+  @Post("register")
+  @ApiCreatedResponse({
+    description: "Пользователь зарегистрирован",
+    schema: swaggerAuthUserResponseSchema,
+  })
+  @ApiBadRequestResponse({
+    description: "Ошибка валидации или бизнес-логики",
+    schema: swaggerErrorResponseSchema,
+  })
   async register(
     @Body() dto: RegisterDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.auth.register(dto);
-
+    const result = await this.authService.register(dto);
     setAuthCookies({
       res,
       accessToken: result.accessToken,
@@ -67,19 +107,30 @@ export class AuthController {
       sameSite: this.cookieSameSite(),
       accessMaxAgeMs: this.accessMaxAgeMs(),
       refreshMaxAgeMs: this.refreshMaxAgeMs(),
+      accessCookieName: this.getAccessCookieName(),
+      refreshCookieName: this.getRefreshCookieName(),
     });
 
-    return { user: result.user };
+    return {
+      user: result.user,
+    };
   }
 
-  @Post('login')
   @Public()
+  @Post("login")
+  @ApiCreatedResponse({
+    description: "Пользователь вошел в систему",
+    schema: swaggerAuthUserResponseSchema,
+  })
+  @ApiBadRequestResponse({
+    description: "Неверные учетные данные или ошибка валидации",
+    schema: swaggerErrorResponseSchema,
+  })
   async login(
-    @Body() dto: RegisterDto,
+    @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.auth.login(dto);
-
+    const result = await this.authService.login(dto);
     setAuthCookies({
       res,
       accessToken: result.accessToken,
@@ -88,24 +139,39 @@ export class AuthController {
       sameSite: this.cookieSameSite(),
       accessMaxAgeMs: this.accessMaxAgeMs(),
       refreshMaxAgeMs: this.refreshMaxAgeMs(),
+      accessCookieName: this.getAccessCookieName(),
+      refreshCookieName: this.getRefreshCookieName(),
     });
 
-    return { user: result.user };
+    return {
+      user: result.user,
+    };
   }
 
   @Public()
-  @ApiCookieAuth('accessToken')
+  @ApiCookieAuth("refresh-cookie")
   @UseGuards(JwtRefreshGuard)
-  @Post('refresh')
+  @Post("refresh")
+  @ApiCreatedResponse({
+    description: "Токены обновлены",
+    schema: swaggerAuthUserResponseSchema,
+  })
+  @ApiUnauthorizedResponse({
+    description: "Недействительный токен обновления",
+    schema: swaggerErrorResponseSchema,
+  })
+  @ApiForbiddenResponse({
+    description: "Доступ запрещен",
+    schema: swaggerErrorResponseSchema,
+  })
   async refresh(
     @CurrentUser() user: AuthUserWithRefresh,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.auth.refreshTokens(
+    const result = await this.authService.refreshTokens(
       user.userId,
       user.refreshToken,
     );
-
     setAuthCookies({
       res,
       accessToken: result.accessToken,
@@ -114,31 +180,110 @@ export class AuthController {
       sameSite: this.cookieSameSite(),
       accessMaxAgeMs: this.accessMaxAgeMs(),
       refreshMaxAgeMs: this.refreshMaxAgeMs(),
+      accessCookieName: this.getAccessCookieName(),
+      refreshCookieName: this.getRefreshCookieName(),
     });
 
-    return { user: result.user };
+    return {
+      user: result.user,
+    };
   }
 
-  @ApiCookieAuth('accessToken')
-  @Post('logout')
+  @ApiCookieAuth("access-cookie")
+  @ApiBearerAuth("access-token")
+  @Get("status")
+  @ApiOkResponse({
+    description: "Текущий статус авторизации",
+    schema: swaggerStatusResponseSchema,
+  })
+  @ApiUnauthorizedResponse({
+    description: "Не авторизован",
+    schema: swaggerErrorResponseSchema,
+  })
+  async status(@CurrentUser() user: AuthUser) {
+    return this.authService.status(user.userId);
+  }
+
+  @ApiCookieAuth("access-cookie")
+  @ApiBearerAuth("access-token")
+  @Post("logout")
+  @ApiCreatedResponse({
+    description: "Выход выполнен",
+    schema: swaggerOkResponseSchema,
+  })
+  @ApiUnauthorizedResponse({
+    description: "Не авторизован",
+    schema: swaggerErrorResponseSchema,
+  })
   async logout(
     @CurrentUser() user: AuthUser,
     @Res({ passthrough: true }) res: Response,
   ) {
-    await this.auth.logout(user.userId);
+    await this.authService.logout(user.userId);
 
-    clearAuthCookies(res, {
+    clearAuthCookies({
+      res,
       secure: this.cookieSecure(),
       sameSite: this.cookieSameSite(),
+      accessCookieName: this.getAccessCookieName(),
+      refreshCookieName: this.getRefreshCookieName(),
     });
 
-    return { ok: true };
+    return {
+      ok: true,
+    };
   }
 
-  @ApiCookieAuth('accessToken')
-  @ApiBearerAuth()
-  @Get('status')
-  status(@CurrentUser() user: AuthUser) {
-    return { authenticated: true, user };
+  @Public()
+  @Get("health")
+  @ApiOkResponse({
+    description: "Состояние сервиса",
+    schema: swaggerHealthResponseSchema,
+  })
+  health() {
+    return {
+      service: "auth-service",
+      status: "ok",
+    };
+  }
+
+  private parseSameSite(
+    rawValue: string | undefined,
+  ): "lax" | "strict" | "none" {
+    const normalized = (rawValue ?? "lax").toLowerCase();
+    if (normalized === "strict" || normalized === "none") {
+      return normalized;
+    }
+
+    return "lax";
+  }
+
+  private cookieSecure(): boolean {
+    return (process.env.COOKIE_SECURE ?? "false") === "true";
+  }
+
+  private cookieSameSite(): "lax" | "strict" | "none" {
+    return this.parseSameSite(
+      process.env.COOKIE_SAME_SITE ?? process.env.COOKIE_SAMESITE,
+    );
+  }
+
+  private accessMaxAgeMs(): number {
+    const raw = process.env.JWT_ACCESS_EXPIRES ?? process.env.ACCESS_TOKEN_TTL;
+    return parseDurationMs(raw ?? "15m");
+  }
+
+  private refreshMaxAgeMs(): number {
+    const raw =
+      process.env.JWT_REFRESH_EXPIRES ?? process.env.REFRESH_TOKEN_TTL;
+    return parseDurationMs(raw ?? "7d");
+  }
+
+  private getAccessCookieName(): string {
+    return process.env.ACCESS_COOKIE_NAME?.trim() || "access_token";
+  }
+
+  private getRefreshCookieName(): string {
+    return process.env.REFRESH_COOKIE_NAME?.trim() || "refresh_token";
   }
 }
