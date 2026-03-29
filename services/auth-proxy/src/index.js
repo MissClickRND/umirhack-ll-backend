@@ -39,7 +39,7 @@ const gatewayOpenApi = {
     description:
       "Единая точка входа API. Auth и защищенные CRUD-маршруты проксируются через порт 3000.",
   },
-  servers: [{ url: "http://localhost:3000" }],
+  servers: [{ url: "/" }],
   tags: [
     {
       name: "gateway",
@@ -870,7 +870,10 @@ app.get("/health", (req, res) => {
 });
 
 app.get("/openapi.json", (req, res) => {
-  res.json(gatewayOpenApi);
+  res.json({
+    ...gatewayOpenApi,
+    servers: [{ url: "/" }],
+  });
 });
 
 app.get("/docs/services", (req, res) => {
@@ -937,8 +940,11 @@ app.use(
 app.use(
   "/docs",
   swaggerUi.serve,
-  swaggerUi.setup(gatewayOpenApi, {
+  swaggerUi.setup(null, {
     customSiteTitle: "API шлюза auth-proxy",
+    swaggerOptions: {
+      url: "/openapi.json",
+    },
   }),
 );
 

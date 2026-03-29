@@ -105,6 +105,7 @@ export class AuthController {
       refreshToken: result.refreshToken,
       secure: this.cookieSecure(),
       sameSite: this.cookieSameSite(),
+      cookieDomain: this.cookieDomain(),
       accessMaxAgeMs: this.accessMaxAgeMs(),
       refreshMaxAgeMs: this.refreshMaxAgeMs(),
       accessCookieName: this.getAccessCookieName(),
@@ -137,6 +138,7 @@ export class AuthController {
       refreshToken: result.refreshToken,
       secure: this.cookieSecure(),
       sameSite: this.cookieSameSite(),
+      cookieDomain: this.cookieDomain(),
       accessMaxAgeMs: this.accessMaxAgeMs(),
       refreshMaxAgeMs: this.refreshMaxAgeMs(),
       accessCookieName: this.getAccessCookieName(),
@@ -178,6 +180,7 @@ export class AuthController {
       refreshToken: result.refreshToken,
       secure: this.cookieSecure(),
       sameSite: this.cookieSameSite(),
+      cookieDomain: this.cookieDomain(),
       accessMaxAgeMs: this.accessMaxAgeMs(),
       refreshMaxAgeMs: this.refreshMaxAgeMs(),
       accessCookieName: this.getAccessCookieName(),
@@ -225,6 +228,7 @@ export class AuthController {
       res,
       secure: this.cookieSecure(),
       sameSite: this.cookieSameSite(),
+      cookieDomain: this.cookieDomain(),
       accessCookieName: this.getAccessCookieName(),
       refreshCookieName: this.getRefreshCookieName(),
     });
@@ -266,6 +270,11 @@ export class AuthController {
     return this.parseSameSite(
       process.env.COOKIE_SAME_SITE ?? process.env.COOKIE_SAMESITE,
     );
+  }
+
+  private cookieDomain(): string | undefined {
+    const value = process.env.COOKIE_DOMAIN?.trim();
+    return value ? value : undefined;
   }
 
   private accessMaxAgeMs(): number {

@@ -8,6 +8,7 @@ export function setAuthCookies(params: {
   refreshToken: string;
   secure: boolean;
   sameSite: CookieSameSite;
+  cookieDomain?: string;
   accessMaxAgeMs: number;
   refreshMaxAgeMs: number;
   accessCookieName: string;
@@ -19,6 +20,7 @@ export function setAuthCookies(params: {
     refreshToken,
     secure,
     sameSite,
+    cookieDomain,
     accessMaxAgeMs,
     refreshMaxAgeMs,
     accessCookieName,
@@ -29,6 +31,7 @@ export function setAuthCookies(params: {
     httpOnly: true,
     secure,
     sameSite,
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
     path: "/",
     maxAge: accessMaxAgeMs,
   });
@@ -37,6 +40,7 @@ export function setAuthCookies(params: {
     httpOnly: true,
     secure,
     sameSite,
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
     path: "/auth",
     maxAge: refreshMaxAgeMs,
   });
@@ -46,15 +50,24 @@ export function clearAuthCookies(params: {
   res: Response;
   secure: boolean;
   sameSite: CookieSameSite;
+  cookieDomain?: string;
   accessCookieName: string;
   refreshCookieName: string;
 }) {
-  const { res, secure, sameSite, accessCookieName, refreshCookieName } = params;
+  const {
+    res,
+    secure,
+    sameSite,
+    cookieDomain,
+    accessCookieName,
+    refreshCookieName,
+  } = params;
 
   res.clearCookie(accessCookieName, {
     httpOnly: true,
     secure,
     sameSite,
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
     path: "/",
   });
 
@@ -62,6 +75,7 @@ export function clearAuthCookies(params: {
     httpOnly: true,
     secure,
     sameSite,
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
     path: "/auth",
   });
 }
