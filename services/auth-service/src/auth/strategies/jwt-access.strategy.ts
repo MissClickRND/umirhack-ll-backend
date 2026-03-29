@@ -4,6 +4,7 @@ import { ExtractJwt, Strategy } from "passport-jwt";
 import type { Request } from "express";
 import { PrismaService } from "../../prisma/prisma.service";
 import type { AuthUser } from "../types/auth-user.type";
+import type { JwtAccessPayload } from "../types/jwt-access-payload";
 
 function cookieExtractorAccess(req: Request): string | null {
   const cookieName = process.env.ACCESS_COOKIE_NAME?.trim() || "access_token";
@@ -24,13 +25,20 @@ function bearerExtractorAccess(req: Request): string | null {
   return token;
 }
 
-type JwtAccessPayload = {
-  sub: string;
-  email: string;
-  role: string;
-  tokenVersion: number;
-  type: "access";
-};
+function parseTokenSub(sub: unknown): number {
+  if (typeof sub === "number" && Number.isInteger(sub) && sub > 0) {
+    return sub;
+  }
+
+  if (typeof sub === "string") {
+    const parsed = Number(sub);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  throw new UnauthorizedException("Токен недействителен или истек");
+}
 
 @Injectable()
 export class JwtAccessStrategy extends PassportStrategy(
@@ -59,8 +67,10 @@ export class JwtAccessStrategy extends PassportStrategy(
       throw new UnauthorizedException("Тип токена не access");
     }
 
+    const userId = parseTokenSub(payload.sub);
+
     const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
+      where: { id: userId },
       select: { tokenVersion: true },
     });
 
@@ -69,7 +79,7 @@ export class JwtAccessStrategy extends PassportStrategy(
     }
 
     return {
-      userId: payload.sub,
+      userId,
       email: payload.email,
       role: payload.role,
     };

@@ -1,7 +1,9 @@
+import type { Role } from "./auth-user.type";
+
 export type JwtRefreshPayload = {
-  sub: string;
+  sub: number;
   email: string;
-  role: string;
+  role: Role;
   tokenVersion: number;
   type: "refresh";
 };

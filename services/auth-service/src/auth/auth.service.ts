@@ -4,7 +4,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
-import type { User } from "@prisma/client";
+import type { Role, User } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 import * as jwt from "jsonwebtoken";
 import { JwtService } from "@nestjs/jwt";
@@ -13,18 +13,20 @@ import { PrismaService } from "../prisma/prisma.service";
 import type { LoginDto } from "./dto/login.dto";
 import type { RegisterDto } from "./dto/register.dto";
 
-interface AccessPayload extends JwtPayload {
-  sub: string;
+type JwtPayloadWithoutSub = Omit<JwtPayload, "sub">;
+
+interface AccessPayload extends JwtPayloadWithoutSub {
+  sub: number;
   email: string;
-  role: string;
+  role: Role;
   tokenVersion: number;
   type: "access";
 }
 
-interface RefreshPayload extends JwtPayload {
-  sub: string;
+interface RefreshPayload extends JwtPayloadWithoutSub {
+  sub: number;
   email: string;
-  role: string;
+  role: Role;
   tokenVersion: number;
   type: "refresh";
 }
@@ -40,11 +42,13 @@ export class AuthService {
     id: true,
     email: true,
     name: true,
+    phone: true,
     role: true,
     passwordHash: true,
     hashedRefreshToken: true,
     tokenVersion: true,
     createdAt: true,
+    updatedAt: true,
   } as const;
 
   async register(dto: RegisterDto) {
@@ -63,7 +67,6 @@ export class AuthService {
       data: {
         email: normalizedEmail,
         name: dto.name?.trim() || undefined,
-        role: "user",
         passwordHash,
       },
       select: this.authSelect,
@@ -117,7 +120,7 @@ export class AuthService {
     };
   }
 
-  async logout(userId: string) {
+  async logout(userId: number) {
     await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -131,7 +134,7 @@ export class AuthService {
     };
   }
 
-  async refreshTokens(userId: string, refreshTokenFromCookie: string) {
+  async refreshTokens(userId: number, refreshTokenFromCookie: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: this.authSelect,
@@ -143,7 +146,11 @@ export class AuthService {
 
     const payload = this.verifyRefresh(refreshTokenFromCookie);
 
-    if (payload.sub !== user.id || payload.tokenVersion !== user.tokenVersion) {
+    const refreshUserId = this.parseTokenSub(payload.sub);
+    if (
+      refreshUserId !== user.id ||
+      payload.tokenVersion !== user.tokenVersion
+    ) {
       throw new ForbiddenException("Доступ запрещен");
     }
 
@@ -170,7 +177,7 @@ export class AuthService {
     };
   }
 
-  async status(userId: string) {
+  async status(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: this.authSelect,
@@ -187,7 +194,7 @@ export class AuthService {
   }
 
   private async setRefreshTokenHash(
-    userId: string,
+    userId: number,
     refreshToken: string,
   ): Promise<void> {
     const hash = await bcrypt.hash(refreshToken, 10);
@@ -198,9 +205,9 @@ export class AuthService {
   }
 
   private async issueTokens(
-    userId: string,
+    userId: number,
     email: string,
-    role: string,
+    role: Role,
     tokenVersion: number,
   ) {
     const accessToken = await this.jwtService.signAsync(
@@ -278,13 +285,40 @@ export class AuthService {
 
   private verifyRefresh(token: string): RefreshPayload {
     try {
-      const payload = jwt.verify(token, this.getRefreshSecret(), {
+      const rawPayload = jwt.verify(token, this.getRefreshSecret(), {
         issuer: this.getIssuer(),
-      }) as RefreshPayload;
+      });
 
-      if (payload.type !== "refresh") {
+      if (typeof rawPayload === "string") {
+        throw new UnauthorizedException("Недействительный токен обновления");
+      }
+
+      const sub = this.parseTokenSub(rawPayload.sub);
+      const tokenVersion = Number(rawPayload.tokenVersion);
+      if (!Number.isInteger(tokenVersion) || tokenVersion < 0) {
+        throw new UnauthorizedException("Недействительный токен обновления");
+      }
+
+      if (rawPayload.type !== "refresh") {
         throw new UnauthorizedException("Недопустимый тип токена");
       }
+
+      const email =
+        typeof rawPayload.email === "string" ? rawPayload.email : undefined;
+      if (!email) {
+        throw new UnauthorizedException("Недействительный токен обновления");
+      }
+
+      const role = this.parseRole(rawPayload.role);
+
+      const payload: RefreshPayload = {
+        ...rawPayload,
+        sub,
+        email,
+        role,
+        tokenVersion,
+        type: "refresh",
+      };
 
       return payload;
     } catch {
@@ -292,15 +326,48 @@ export class AuthService {
     }
   }
 
+  private parseRole(role: unknown): Role {
+    if (
+      role === "ADMIN" ||
+      role === "WAITER" ||
+      role === "COOK" ||
+      role === "CUSTOMER"
+    ) {
+      return role;
+    }
+
+    throw new UnauthorizedException("Недействительный токен обновления");
+  }
+
+  private parseTokenSub(sub: unknown): number {
+    if (typeof sub === "number" && Number.isInteger(sub) && sub > 0) {
+      return sub;
+    }
+
+    if (typeof sub === "string") {
+      const parsed = Number(sub);
+      if (Number.isInteger(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+
+    throw new UnauthorizedException("Недействительный токен обновления");
+  }
+
   private toPublicUser(
-    user: Pick<User, "id" | "email" | "name" | "role" | "createdAt">,
+    user: Pick<
+      User,
+      "id" | "email" | "name" | "phone" | "role" | "createdAt" | "updatedAt"
+    >,
   ) {
     return {
       id: user.id,
       email: user.email,
-      name: user.name,
+      name: user.name ?? undefined,
+      phone: user.phone ?? undefined,
       role: user.role,
       createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
     };
   }
 }

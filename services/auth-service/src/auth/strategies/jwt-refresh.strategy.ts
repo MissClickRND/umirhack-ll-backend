@@ -3,19 +3,27 @@ import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
 import type { Request } from "express";
 import type { AuthUserWithRefresh } from "../types/auth-user.type";
+import type { JwtRefreshPayload } from "../types/jwt-refresh-payload";
 
 function cookieExtractorRefresh(req: Request): string | null {
   const cookieName = process.env.REFRESH_COOKIE_NAME?.trim() || "refresh_token";
   return req?.cookies?.[cookieName] ?? null;
 }
 
-type JwtRefreshPayload = {
-  sub: string;
-  email: string;
-  role: string;
-  tokenVersion: number;
-  type: "refresh";
-};
+function parseTokenSub(sub: unknown): number {
+  if (typeof sub === "number" && Number.isInteger(sub) && sub > 0) {
+    return sub;
+  }
+
+  if (typeof sub === "string") {
+    const parsed = Number(sub);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  throw new UnauthorizedException("Недействительный токен обновления");
+}
 
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(
@@ -53,8 +61,10 @@ export class JwtRefreshStrategy extends PassportStrategy(
       throw new UnauthorizedException("Токен обновления отсутствует");
     }
 
+    const userId = parseTokenSub(payload.sub);
+
     return {
-      userId: payload.sub,
+      userId,
       email: payload.email,
       role: payload.role,
       refreshToken,

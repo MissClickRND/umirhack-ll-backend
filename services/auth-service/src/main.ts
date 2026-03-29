@@ -53,6 +53,16 @@ class RussianHttpExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const statusCode = exception.getStatus();
+
+      if (statusCode === HttpStatus.UNAUTHORIZED) {
+        response.status(HttpStatus.UNAUTHORIZED).json({
+          statusCode: HttpStatus.UNAUTHORIZED,
+          message: "Unuftaized",
+          error: "Unuftaized",
+        });
+        return;
+      }
+
       const payload = exception.getResponse();
 
       let message: string | string[] = exception.message;
@@ -88,19 +98,22 @@ function enrichAuthSwaggerDocument(document: Record<string, any>): void {
   document.components.schemas.UserPublic = {
     type: "object",
     properties: {
-      id: { type: "string", example: "clx0000000000abc123" },
+      id: { type: "integer", example: 1 },
       email: { type: "string", format: "email", example: "user@test.dev" },
-      name: { type: "string", example: "User" },
-      role: { type: "string", example: "user" },
+      name: { type: "string", nullable: true, example: "User" },
+      phone: { type: "string", nullable: true, example: "+79991234567" },
+      role: {
+        type: "string",
+        enum: ["ADMIN", "WAITER", "COOK", "CUSTOMER"],
+        example: "CUSTOMER",
+      },
       createdAt: { type: "string", format: "date-time" },
+      updatedAt: { type: "string", format: "date-time" },
     },
   };
 
   document.components.schemas.AuthUserResponse = {
-    type: "object",
-    properties: {
-      user: { $ref: "#/components/schemas/UserPublic" },
-    },
+    allOf: [{ $ref: "#/components/schemas/UserPublic" }],
   };
 
   document.components.schemas.AuthStatusResponse = {

@@ -1,11 +1,28 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import * as jwt from "jsonwebtoken";
 
-interface AccessPayload extends jwt.JwtPayload {
-  sub: string;
+type JwtPayloadWithoutSub = Omit<jwt.JwtPayload, "sub">;
+
+interface AccessPayload extends JwtPayloadWithoutSub {
+  sub: string | number;
   email: string;
   role: string;
   type: "access";
+}
+
+function parseTokenSub(sub: unknown): number {
+  if (typeof sub === "number" && Number.isInteger(sub) && sub > 0) {
+    return sub;
+  }
+
+  if (typeof sub === "string") {
+    const parsed = Number(sub);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  throw new UnauthorizedException("Недействительный access-токен");
 }
 
 @Injectable()
@@ -25,8 +42,10 @@ export class AuthGateService {
       throw new UnauthorizedException("Тип токена не access");
     }
 
+    const userId = parseTokenSub(payload.sub);
+
     return {
-      id: payload.sub,
+      id: userId,
       email: payload.email,
       role: payload.role,
       exp: payload.exp ?? null,

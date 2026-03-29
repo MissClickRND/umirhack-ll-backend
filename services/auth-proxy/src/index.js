@@ -29,6 +29,14 @@ function parseCorsCredentials(raw) {
   return (raw || "true").toLowerCase() === "true";
 }
 
+function unauthorizedPayload() {
+  return {
+    statusCode: 401,
+    message: "Unuftaized",
+    error: "Unuftaized",
+  };
+}
+
 const corsOrigins = parseCorsOrigins(process.env.CORS_ORIGINS);
 
 const gatewayOpenApi = {
@@ -819,9 +827,7 @@ async function verifyAccess(req, res, next) {
   const accessToken = tokenFromHeader || tokenFromCookie;
 
   if (!accessToken) {
-    res.status(401).json({
-      message: `Токен доступа обязателен в заголовке Authorization или в cookie ${accessCookieName}`,
-    });
+    res.status(401).json(unauthorizedPayload());
     return;
   }
 
@@ -836,19 +842,22 @@ async function verifyAccess(req, res, next) {
 
     const user = response.data?.user;
     if (!user?.id) {
-      res.status(401).json({
-        message: "auth-gate не вернул корректные данные пользователя",
-      });
+      res.status(401).json(unauthorizedPayload());
       return;
     }
 
     req.headers["x-user-id"] = String(user.id);
     req.headers["x-user-email"] = String(user.email || "");
-    req.headers["x-user-role"] = String(user.role || "user");
+    req.headers["x-user-role"] = String(user.role || "CUSTOMER");
     next();
   } catch (error) {
     const statusCode = error.response?.status || 401;
-    const message = error.response?.data?.message || "Не авторизован";
+    if (statusCode === 401) {
+      res.status(401).json(unauthorizedPayload());
+      return;
+    }
+
+    const message = error.response?.data?.message || "Ошибка авторизации";
     res.status(statusCode).json({ message });
   }
 }
@@ -869,18 +878,26 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.get("/openapi.json", (req, res) => {
-  res.json({
+function buildGatewayOpenApi() {
+  return {
     ...gatewayOpenApi,
     servers: [{ url: "/" }],
-  });
+  };
+}
+
+app.get("/openapi.json", (req, res) => {
+  res.json(buildGatewayOpenApi());
+});
+
+app.get("/docs/openapi.json", (req, res) => {
+  res.json(buildGatewayOpenApi());
 });
 
 app.get("/docs/services", (req, res) => {
   res.json({
     gateway: {
       swagger: "/docs",
-      openapi: "/openapi.json",
+      openapi: "/docs/openapi.json",
     },
     authService: {
       openapi: "/docs/auth-service/openapi.json",
@@ -943,7 +960,7 @@ app.use(
   swaggerUi.setup(null, {
     customSiteTitle: "API шлюза auth-proxy",
     swaggerOptions: {
-      url: "/openapi.json",
+      url: "/docs/openapi.json",
     },
   }),
 );

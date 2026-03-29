@@ -23,20 +23,21 @@ import { AuthService } from "./auth.service";
 const swaggerUserSchema = {
   type: "object",
   properties: {
-    id: { type: "string", example: "clx0000000000abc123" },
+    id: { type: "integer", example: 1 },
     email: { type: "string", format: "email", example: "user@test.dev" },
-    name: { type: "string", example: "User" },
-    role: { type: "string", example: "user" },
+    name: { type: "string", nullable: true, example: "User" },
+    phone: { type: "string", nullable: true, example: "+79991234567" },
+    role: {
+      type: "string",
+      enum: ["ADMIN", "WAITER", "COOK", "CUSTOMER"],
+      example: "CUSTOMER",
+    },
     createdAt: { type: "string", format: "date-time" },
+    updatedAt: { type: "string", format: "date-time" },
   },
-} as const;
+};
 
-const swaggerAuthUserResponseSchema = {
-  type: "object",
-  properties: {
-    user: swaggerUserSchema,
-  },
-} as const;
+const swaggerAuthUserResponseSchema = swaggerUserSchema;
 
 const swaggerStatusResponseSchema = {
   type: "object",
@@ -44,14 +45,14 @@ const swaggerStatusResponseSchema = {
     authenticated: { type: "boolean", example: true },
     user: swaggerUserSchema,
   },
-} as const;
+};
 
 const swaggerOkResponseSchema = {
   type: "object",
   properties: {
     ok: { type: "boolean", example: true },
   },
-} as const;
+};
 
 const swaggerHealthResponseSchema = {
   type: "object",
@@ -59,7 +60,7 @@ const swaggerHealthResponseSchema = {
     service: { type: "string", example: "auth-service" },
     status: { type: "string", example: "ok" },
   },
-} as const;
+};
 
 const swaggerErrorResponseSchema: Record<string, unknown> = {
   type: "object",
@@ -112,9 +113,7 @@ export class AuthController {
       refreshCookieName: this.getRefreshCookieName(),
     });
 
-    return {
-      user: result.user,
-    };
+    return result.user;
   }
 
   @Public()
@@ -145,9 +144,7 @@ export class AuthController {
       refreshCookieName: this.getRefreshCookieName(),
     });
 
-    return {
-      user: result.user,
-    };
+    return result.user;
   }
 
   @Public()
@@ -187,9 +184,7 @@ export class AuthController {
       refreshCookieName: this.getRefreshCookieName(),
     });
 
-    return {
-      user: result.user,
-    };
+    return result.user;
   }
 
   @ApiCookieAuth("access-cookie")

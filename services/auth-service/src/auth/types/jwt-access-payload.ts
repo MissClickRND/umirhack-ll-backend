@@ -1,7 +1,9 @@
+import type { Role } from "./auth-user.type";
+
 export type JwtAccessPayload = {
-  sub: string;
+  sub: number;
   email: string;
-  role: string;
+  role: Role;
   tokenVersion: number;
   type: "access";
 };
