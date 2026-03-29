@@ -27,9 +27,12 @@ export function setAuthCookies(params: {
     refreshCookieName,
   } = params;
 
+  // Browsers reject SameSite=None cookies without Secure.
+  const normalizedSecure = sameSite === "none" ? true : secure;
+
   res.cookie(accessCookieName, accessToken, {
     httpOnly: true,
-    secure,
+    secure: normalizedSecure,
     sameSite,
     ...(cookieDomain ? { domain: cookieDomain } : {}),
     path: "/",
@@ -38,10 +41,10 @@ export function setAuthCookies(params: {
 
   res.cookie(refreshCookieName, refreshToken, {
     httpOnly: true,
-    secure,
+    secure: normalizedSecure,
     sameSite,
     ...(cookieDomain ? { domain: cookieDomain } : {}),
-    path: "/auth",
+    path: "/",
     maxAge: refreshMaxAgeMs,
   });
 }
@@ -63,9 +66,11 @@ export function clearAuthCookies(params: {
     refreshCookieName,
   } = params;
 
+  const normalizedSecure = sameSite === "none" ? true : secure;
+
   res.clearCookie(accessCookieName, {
     httpOnly: true,
-    secure,
+    secure: normalizedSecure,
     sameSite,
     ...(cookieDomain ? { domain: cookieDomain } : {}),
     path: "/",
@@ -73,9 +78,9 @@ export function clearAuthCookies(params: {
 
   res.clearCookie(refreshCookieName, {
     httpOnly: true,
-    secure,
+    secure: normalizedSecure,
     sameSite,
     ...(cookieDomain ? { domain: cookieDomain } : {}),
-    path: "/auth",
+    path: "/",
   });
 }

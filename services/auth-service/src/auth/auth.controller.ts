@@ -258,13 +258,22 @@ export class AuthController {
   }
 
   private cookieSecure(): boolean {
-    return (process.env.COOKIE_SECURE ?? "false") === "true";
+    const rawValue = process.env.COOKIE_SECURE;
+    if (rawValue !== undefined) {
+      return rawValue.toLowerCase() === "true";
+    }
+
+    return (process.env.NODE_ENV ?? "").toLowerCase() === "production";
   }
 
   private cookieSameSite(): "lax" | "strict" | "none" {
-    return this.parseSameSite(
-      process.env.COOKIE_SAME_SITE ?? process.env.COOKIE_SAMESITE,
-    );
+    const rawValue =
+      process.env.COOKIE_SAME_SITE ?? process.env.COOKIE_SAMESITE;
+    if (rawValue) {
+      return this.parseSameSite(rawValue);
+    }
+
+    return this.cookieSecure() ? "none" : "lax";
   }
 
   private cookieDomain(): string | undefined {

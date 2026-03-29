@@ -29,15 +29,22 @@ function parseCorsCredentials(raw) {
   return (raw || "true").toLowerCase() === "true";
 }
 
+function parseProxyTimeoutMs(raw) {
+  const fallback = 10000;
+  const parsed = Number(raw || fallback);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 function unauthorizedPayload() {
   return {
     statusCode: 401,
-    message: "Unuftaized",
-    error: "Unuftaized",
+    message: "Unauthorized",
+    error: "Unauthorized",
   };
 }
 
 const corsOrigins = parseCorsOrigins(process.env.CORS_ORIGINS);
+const proxyTimeoutMs = parseProxyTimeoutMs(process.env.PROXY_TIMEOUT_MS);
 
 const gatewayOpenApi = {
   openapi: "3.0.3",
@@ -807,13 +814,34 @@ function joinPath(basePath, remainderPath) {
 
   return `${basePath}${remainderPath}`;
 }
+
 function buildProxyErrorHandler(serviceName) {
   return (error, req, res) => {
     const message = `Не удалось подключиться к ${serviceName}`;
     if (!res.headersSent) {
-      res.status(502).json({ message, details: error.message });
+      res.status(502).json({
+        message,
+        error: "Bad Gateway",
+        details: error?.message || "Proxy upstream error",
+      });
     }
   };
+}
+
+function createServiceProxy({ target, serviceName, pathRewrite }) {
+  const errorHandler = buildProxyErrorHandler(serviceName);
+
+  return createProxyMiddleware({
+    target,
+    changeOrigin: true,
+    pathRewrite,
+    proxyTimeout: proxyTimeoutMs,
+    timeout: proxyTimeoutMs,
+    onError: errorHandler,
+    on: {
+      error: errorHandler,
+    },
+  });
 }
 
 async function verifyAccess(req, res, next) {
@@ -916,41 +944,37 @@ app.get("/docs/services", (req, res) => {
 
 app.use(
   "/docs/auth-service/openapi.json",
-  createProxyMiddleware({
+  createServiceProxy({
     target: authServiceUrl,
-    changeOrigin: true,
+    serviceName: "auth-service",
     pathRewrite: () => "/openapi.json",
-    onError: buildProxyErrorHandler("auth-service"),
   }),
 );
 
 app.use(
   "/docs/auth-gate/openapi.json",
-  createProxyMiddleware({
+  createServiceProxy({
     target: authGateUrl,
-    changeOrigin: true,
+    serviceName: "auth-gate",
     pathRewrite: () => "/openapi.json",
-    onError: buildProxyErrorHandler("auth-gate"),
   }),
 );
 
 app.use(
   "/docs/posts-service/openapi.json",
-  createProxyMiddleware({
+  createServiceProxy({
     target: postsServiceUrl,
-    changeOrigin: true,
+    serviceName: "posts-service",
     pathRewrite: () => "/openapi.json",
-    onError: buildProxyErrorHandler("posts-service"),
   }),
 );
 
 app.use(
   "/docs/notes-service/openapi.json",
-  createProxyMiddleware({
+  createServiceProxy({
     target: notesServiceUrl,
-    changeOrigin: true,
+    serviceName: "notes-service",
     pathRewrite: () => "/openapi.json",
-    onError: buildProxyErrorHandler("notes-service"),
   }),
 );
 
@@ -961,6 +985,7 @@ app.use(
     customSiteTitle: "API шлюза auth-proxy",
     swaggerOptions: {
       url: "/docs/openapi.json",
+      withCredentials: true,
     },
   }),
 );
@@ -968,84 +993,76 @@ app.use(
 app.use(
   "/auth",
   protectAuthRoutes,
-  createProxyMiddleware({
+  createServiceProxy({
     target: authServiceUrl,
-    changeOrigin: true,
+    serviceName: "auth-service",
     pathRewrite: (path) => `/auth${path}`,
-    onError: buildProxyErrorHandler("auth-service"),
   }),
 );
 
 app.use(
   "/register",
-  createProxyMiddleware({
+  createServiceProxy({
     target: authServiceUrl,
-    changeOrigin: true,
+    serviceName: "auth-service",
     pathRewrite: () => "/auth/register",
-    onError: buildProxyErrorHandler("auth-service"),
   }),
 );
 
 app.use(
   "/login",
-  createProxyMiddleware({
+  createServiceProxy({
     target: authServiceUrl,
-    changeOrigin: true,
+    serviceName: "auth-service",
     pathRewrite: () => "/auth/login",
-    onError: buildProxyErrorHandler("auth-service"),
   }),
 );
 
 app.use(
   "/refresh",
-  createProxyMiddleware({
+  createServiceProxy({
     target: authServiceUrl,
-    changeOrigin: true,
+    serviceName: "auth-service",
     pathRewrite: () => "/auth/refresh",
-    onError: buildProxyErrorHandler("auth-service"),
   }),
 );
 
 app.use(
   "/status",
   verifyAccess,
-  createProxyMiddleware({
+  createServiceProxy({
     target: authServiceUrl,
-    changeOrigin: true,
+    serviceName: "auth-service",
     pathRewrite: () => "/auth/status",
-    onError: buildProxyErrorHandler("auth-service"),
   }),
 );
 
 app.use(
   "/logout",
-  createProxyMiddleware({
+  createServiceProxy({
     target: authServiceUrl,
-    changeOrigin: true,
+    serviceName: "auth-service",
     pathRewrite: () => "/auth/logout",
-    onError: buildProxyErrorHandler("auth-service"),
   }),
 );
 
 app.use(
   "/api/posts",
   verifyAccess,
-  createProxyMiddleware({
+  createServiceProxy({
     target: postsServiceUrl,
-    changeOrigin: true,
+    serviceName: "posts-service",
     pathRewrite: (path) => joinPath("/posts", path),
-    onError: buildProxyErrorHandler("posts-service"),
   }),
 );
 
 app.use(
   "/api/notes",
   verifyAccess,
-  createProxyMiddleware({
+  createServiceProxy({
     target: notesServiceUrl,
-    changeOrigin: true,
+    serviceName: "notes-service",
     pathRewrite: (path) => joinPath("/notes", path),
-    onError: buildProxyErrorHandler("notes-service"),
   }),
 );
 

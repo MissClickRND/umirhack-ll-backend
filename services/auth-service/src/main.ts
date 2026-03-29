@@ -57,8 +57,8 @@ class RussianHttpExceptionFilter implements ExceptionFilter {
       if (statusCode === HttpStatus.UNAUTHORIZED) {
         response.status(HttpStatus.UNAUTHORIZED).json({
           statusCode: HttpStatus.UNAUTHORIZED,
-          message: "Unuftaized",
-          error: "Unuftaized",
+          message: "Unauthorized",
+          error: "Unauthorized",
         });
         return;
       }
