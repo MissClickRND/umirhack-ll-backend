@@ -30,7 +30,7 @@ services:
     env_file:
       - ./.env
     environment:
-      PORT: ${AUTH_SERVICE_PORT:-3001}
+      PORT: 3001
       DATABASE_URL: ${AUTH_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/backnew?schema=auth}
     command: npm run start:dev
     volumes:
@@ -49,7 +49,7 @@ services:
     env_file:
       - ./.env
     environment:
-      PORT: ${AUTH_GATE_PORT:-3002}
+      PORT: 3002
     command: npm run start:dev
     volumes:
       - ./services/auth-gate:/app
@@ -64,7 +64,7 @@ services:
     env_file:
       - ./.env
     environment:
-      PORT: ${POSTS_SERVICE_PORT:-3003}
+      PORT: 3003
       DATABASE_URL: ${POSTS_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/backnew?schema=posts}
     command: npm run start:dev
     volumes:
@@ -83,10 +83,10 @@ services:
     env_file:
       - ./.env
     environment:
-      PORT: ${NOTES_SERVICE_PORT:-3004}
+      PORT: 3004
       NOTES_DATABASE_URL: ${NOTES_DATABASE_URL:-postgresql+psycopg2://postgres:postgres@postgres:5432/backnew}
       NOTES_DB_SCHEMA: ${NOTES_DB_SCHEMA:-notes}
-    command: uvicorn app.main:app --host 0.0.0.0 --port ${NOTES_SERVICE_PORT:-3004} --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 3004 --reload
     volumes:
       - ./services/notes-service:/app
     depends_on:
@@ -103,10 +103,6 @@ services:
       - ./.env
     environment:
       PORT: 3000
-      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:3001}
-      AUTH_GATE_URL: ${AUTH_GATE_URL:-http://auth-gate:3002}
-      POSTS_SERVICE_URL: ${POSTS_SERVICE_URL:-http://posts-service:3003}
-      NOTES_SERVICE_URL: ${NOTES_SERVICE_URL:-http://notes-service:3004}
     command: npm run start:dev
     volumes:
       - ./services/auth-proxy:/app
@@ -117,7 +113,7 @@ services:
       - posts-service
       - notes-service
     ports:
-      - "${AUTH_PROXY_PORT:-3000}:3000"
+      - "3000:3000"
 
 volumes:
   postgres_data:

@@ -24,24 +24,16 @@
 
 Минимально важные переменные:
 
-- `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
+- `POSTGRES_HOST`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
 - `AUTH_DATABASE_URL`, `POSTS_DATABASE_URL`, `NOTES_DATABASE_URL`, `NOTES_DB_SCHEMA`
 - `JWT_SECRET`, `JWT_ISSUER`, `ACCESS_TOKEN_TTL`, `REFRESH_TOKEN_TTL`
 - `ACCESS_COOKIE_NAME`, `REFRESH_COOKIE_NAME`, `COOKIE_SECURE`, `COOKIE_SAME_SITE`, `COOKIE_DOMAIN`
-- `AUTH_SERVICE_URL`, `AUTH_GATE_URL`, `POSTS_SERVICE_URL`, `NOTES_SERVICE_URL`
 - `CORS_ORIGINS`, `CORS_CREDENTIALS`
 
 Пример:
 
 ```env
 NODE_ENV=development
-
-AUTH_PROXY_PORT=3000
-AUTH_SERVICE_PORT=3001
-AUTH_GATE_PORT=3002
-POSTS_SERVICE_PORT=3003
-NOTES_SERVICE_PORT=3004
-POSTGRES_PORT=5432
 
 POSTGRES_HOST=postgres
 POSTGRES_USER=postgres
@@ -52,11 +44,6 @@ AUTH_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/backnew?schema=au
 POSTS_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/backnew?schema=posts
 NOTES_DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/backnew
 NOTES_DB_SCHEMA=notes
-
-AUTH_SERVICE_URL=http://auth-service:3001
-AUTH_GATE_URL=http://auth-gate:3002
-POSTS_SERVICE_URL=http://posts-service:3003
-NOTES_SERVICE_URL=http://notes-service:3004
 
 JWT_SECRET=super-secret-local-key
 JWT_ACCESS_SECRET=super-secret-local-key
@@ -120,6 +107,13 @@ npm run stop:dev
 npm run stop:prod
 ```
 
+## CI/CD деплой на VPS
+
+- Папка backend-репозитория на VPS: `/opt/umirhack-backend/umirhack-ll-backend`
+- В GitHub Secrets для backend-репозитория укажи:
+  - `BACKEND_PROJECT_DIR=/opt/umirhack-backend/umirhack-ll-backend`
+- Если `BACKEND_PROJECT_DIR` не задан, workflow использует этот путь по умолчанию.
+
 ## Swagger
 
 Внешний Swagger gateway (основной для клиентов):
@@ -154,15 +148,13 @@ docker compose down -v
   - `build.context: ./services/<service-name>`
   - `build.target: development` для dev и `production` для prod
   - `env_file: ./.env`
-  - `environment` с `PORT: ${<SERVICE>_PORT:-30xx}`
+  - `environment` с фиксированным `PORT: 30xx`
   - `expose` с внутренним портом сервиса
   - для dev: `command` и `volumes` (по аналогии с текущими сервисами)
   - если нужна БД: `depends_on.postgres.condition: service_healthy`
 - Добавь переменные в `.env` и `.env.example`:
-  - `<SERVICE>_PORT=30xx`
-  - `<SERVICE>_URL=http://<service-name>:30xx`
   - при БД: `<SERVICE>_DATABASE_URL=...` и/или `<SERVICE>_DB_SCHEMA=...`
-- Подключи URL нового сервиса в `auth-proxy` (оба compose-файла, секция `auth-proxy.environment`) и добавь сервис в `auth-proxy.depends_on`.
+- Подключи новый сервис в `auth-proxy` прямо в коде и добавь сервис в `auth-proxy.depends_on`.
 - Обнови `services/auth-proxy/src/index.js`:
   - добавь новую переменную URL сервиса из env
   - добавь запись в `GET /docs/services`

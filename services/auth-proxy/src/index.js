@@ -7,13 +7,10 @@ const swaggerUi = require("swagger-ui-express");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 
 const port = Number(process.env.PORT || 3000);
-const authServiceUrl =
-  process.env.AUTH_SERVICE_URL || "http://auth-service:3001";
-const authGateUrl = process.env.AUTH_GATE_URL || "http://auth-gate:3002";
-const postsServiceUrl =
-  process.env.POSTS_SERVICE_URL || "http://posts-service:3003";
-const notesServiceUrl =
-  process.env.NOTES_SERVICE_URL || "http://notes-service:3004";
+const authServiceUrl = "http://auth-service:3001";
+const authGateUrl = "http://auth-gate:3002";
+const postsServiceUrl = "http://posts-service:3003";
+const notesServiceUrl = "http://notes-service:3004";
 const accessCookieName = process.env.ACCESS_COOKIE_NAME || "access_token";
 const refreshCookieName = process.env.REFRESH_COOKIE_NAME || "refresh_token";
 
@@ -839,11 +836,9 @@ async function verifyAccess(req, res, next) {
 
     const user = response.data?.user;
     if (!user?.id) {
-      res
-        .status(401)
-        .json({
-          message: "auth-gate не вернул корректные данные пользователя",
-        });
+      res.status(401).json({
+        message: "auth-gate не вернул корректные данные пользователя",
+      });
       return;
     }
 

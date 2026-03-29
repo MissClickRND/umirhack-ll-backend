@@ -47,16 +47,17 @@ jobs:
         uses: appleboy/ssh-action@v1.2.0
         env:
           BACKEND_PROJECT_DIR: ${{ secrets.BACKEND_PROJECT_DIR }}
+          BACKEND_ENV_FILE: ${{ secrets.BACKEND_ENV_FILE }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT != '' && secrets.VPS_PORT || 22 }}
           script_stop: true
-          envs: BACKEND_PROJECT_DIR
+          envs: BACKEND_PROJECT_DIR,BACKEND_ENV_FILE
           script: |
             set -euo pipefail
-            PROJECT_DIR="${BACKEND_PROJECT_DIR:-/opt/umirhack-backend}"
+            PROJECT_DIR="${BACKEND_PROJECT_DIR:-/opt/umirhack-backend/umirhack-ll-backend}"
 
             if [ ! -d "$PROJECT_DIR/.git" ]; then
               echo "Repository not found in $PROJECT_DIR"
@@ -68,9 +69,12 @@ jobs:
             git checkout main
             git pull --ff-only origin main
 
-            if [ ! -f ".env" ]; then
+            if [ -n "${BACKEND_ENV_FILE:-}" ]; then
+              printf '%s\n' "$BACKEND_ENV_FILE" > .env
+              echo "Updated .env from BACKEND_ENV_FILE secret"
+            elif [ ! -f ".env" ]; then
               cp .env.example .env
-              echo "Created .env from .env.example. Adjust secrets in $PROJECT_DIR/.env"
+              echo "Created .env from .env.example"
             fi
 
             docker compose up -d --build --remove-orphans
