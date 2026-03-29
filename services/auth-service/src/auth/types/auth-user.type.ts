@@ -1,4 +1,6 @@
-export type Role = "ADMIN" | "WAITER" | "COOK" | "CUSTOMER";
+export const ROLE_VALUES = ["ADMIN", "WAITER", "COOK", "CUSTOMER"] as const;
+
+export type Role = (typeof ROLE_VALUES)[number];
 
 export type AuthUser = {
   userId: number;

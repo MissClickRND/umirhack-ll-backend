@@ -51,6 +51,16 @@ class RussianHttpExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const statusCode = exception.getStatus();
+
+      if (statusCode === HttpStatus.UNAUTHORIZED) {
+        response.status(HttpStatus.UNAUTHORIZED).json({
+          statusCode: HttpStatus.UNAUTHORIZED,
+          message: "Unauthorized",
+          error: "Unauthorized",
+        });
+        return;
+      }
+
       const payload = exception.getResponse();
 
       let message: string | string[] = exception.message;

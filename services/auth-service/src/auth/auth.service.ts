@@ -67,6 +67,7 @@ export class AuthService {
       data: {
         email: normalizedEmail,
         name: dto.name?.trim() || undefined,
+        role: "CUSTOMER",
         passwordHash,
       },
       select: this.authSelect,
@@ -146,11 +147,7 @@ export class AuthService {
 
     const payload = this.verifyRefresh(refreshTokenFromCookie);
 
-    const refreshUserId = this.parseTokenSub(payload.sub);
-    if (
-      refreshUserId !== user.id ||
-      payload.tokenVersion !== user.tokenVersion
-    ) {
+    if (payload.sub !== user.id || payload.tokenVersion !== user.tokenVersion) {
       throw new ForbiddenException("Доступ запрещен");
     }
 

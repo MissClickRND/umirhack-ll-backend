@@ -1,4 +1,9 @@
-import { BadRequestException, Controller, Get, Headers } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  Headers,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AuthGateService } from "./auth-gate.service";
 
@@ -11,9 +16,7 @@ export class AuthGateController {
   @Get("verify")
   verify(@Headers("authorization") authorization?: string) {
     if (!authorization || !authorization.startsWith("Bearer ")) {
-      throw new BadRequestException(
-        "Заголовок Authorization должен содержать Bearer токен",
-      );
+      throw new UnauthorizedException("Unauthorized");
     }
 
     const token = authorization.slice(7);
