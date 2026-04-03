@@ -16,6 +16,9 @@ export function setAuthCookies(params: {
   sameSite: 'lax' | 'strict' | 'none';
   accessMaxAgeMs: number;
   refreshMaxAgeMs: number;
+  domain?: string;
+  accessCookieName?: string;
+  refreshCookieName?: string;
 }) {
   const {
     res,
@@ -25,20 +28,25 @@ export function setAuthCookies(params: {
     sameSite,
     accessMaxAgeMs,
     refreshMaxAgeMs,
+    domain,
+    accessCookieName = 'accessToken',
+    refreshCookieName = 'refreshToken',
   } = params;
 
-  res.cookie('accessToken', accessToken, {
+  res.cookie(accessCookieName, accessToken, {
     httpOnly: true,
     secure,
     sameSite,
+    domain,
     path: '/', // access нужен на все запросы
     maxAge: accessMaxAgeMs,
   });
 
-  res.cookie('refreshToken', refreshToken, {
+  res.cookie(refreshCookieName, refreshToken, {
     httpOnly: true,
     secure,
     sameSite,
+    domain,
     // Часто refresh ограничивают только auth-роутами:
     path: '/auth',
     maxAge: refreshMaxAgeMs,
@@ -47,20 +55,34 @@ export function setAuthCookies(params: {
 
 export function clearAuthCookies(
   res: Response,
-  params: { secure: boolean; sameSite: 'lax' | 'strict' | 'none' },
+  params: {
+    secure: boolean;
+    sameSite: 'lax' | 'strict' | 'none';
+    domain?: string;
+    accessCookieName?: string;
+    refreshCookieName?: string;
+  },
 ) {
-  const { secure, sameSite } = params;
+  const {
+    secure,
+    sameSite,
+    domain,
+    accessCookieName = 'accessToken',
+    refreshCookieName = 'refreshToken',
+  } = params;
 
-  res.clearCookie('accessToken', {
+  res.clearCookie(accessCookieName, {
     httpOnly: true,
     secure,
     sameSite,
+    domain,
     path: '/',
   });
-  res.clearCookie('refreshToken', {
+  res.clearCookie(refreshCookieName, {
     httpOnly: true,
     secure,
     sameSite,
+    domain,
     path: '/auth',
   });
 }

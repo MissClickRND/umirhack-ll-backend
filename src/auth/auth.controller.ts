@@ -35,10 +35,25 @@ export class AuthController {
 
   private cookieSameSite(): 'lax' | 'strict' | 'none' {
     const v = (
-      this.config.get<string>('COOKIE_SAMESITE') ?? 'lax'
+      this.config.get<string>('COOKIE_SAMESITE') ??
+      this.config.get<string>('COOKIE_SAME_SITE') ??
+      'lax'
     ).toLowerCase();
     if (v === 'none' || v === 'strict' || v === 'lax') return v;
     return 'lax';
+  }
+
+  private cookieDomain() {
+    const value = this.config.get<string>('COOKIE_DOMAIN')?.trim();
+    return value ? value : undefined;
+  }
+
+  private accessCookieName() {
+    return this.config.get<string>('ACCESS_COOKIE_NAME') ?? 'accessToken';
+  }
+
+  private refreshCookieName() {
+    return this.config.get<string>('REFRESH_COOKIE_NAME') ?? 'refreshToken';
   }
 
   private accessMaxAgeMs() {
@@ -65,6 +80,9 @@ export class AuthController {
       refreshToken: result.refreshToken,
       secure: this.cookieSecure(),
       sameSite: this.cookieSameSite(),
+      domain: this.cookieDomain(),
+      accessCookieName: this.accessCookieName(),
+      refreshCookieName: this.refreshCookieName(),
       accessMaxAgeMs: this.accessMaxAgeMs(),
       refreshMaxAgeMs: this.refreshMaxAgeMs(),
     });
@@ -86,6 +104,9 @@ export class AuthController {
       refreshToken: result.refreshToken,
       secure: this.cookieSecure(),
       sameSite: this.cookieSameSite(),
+      domain: this.cookieDomain(),
+      accessCookieName: this.accessCookieName(),
+      refreshCookieName: this.refreshCookieName(),
       accessMaxAgeMs: this.accessMaxAgeMs(),
       refreshMaxAgeMs: this.refreshMaxAgeMs(),
     });
@@ -112,6 +133,9 @@ export class AuthController {
       refreshToken: result.refreshToken,
       secure: this.cookieSecure(),
       sameSite: this.cookieSameSite(),
+      domain: this.cookieDomain(),
+      accessCookieName: this.accessCookieName(),
+      refreshCookieName: this.refreshCookieName(),
       accessMaxAgeMs: this.accessMaxAgeMs(),
       refreshMaxAgeMs: this.refreshMaxAgeMs(),
     });
@@ -130,6 +154,9 @@ export class AuthController {
     clearAuthCookies(res, {
       secure: this.cookieSecure(),
       sameSite: this.cookieSameSite(),
+      domain: this.cookieDomain(),
+      accessCookieName: this.accessCookieName(),
+      refreshCookieName: this.refreshCookieName(),
     });
 
     return { ok: true };
