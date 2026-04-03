@@ -1,0 +1,26 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  HR
+  NEED_VERIFICATION
+  UNIVERSITY
+  STUDENT
+}
+
+model User {
+  id                 Int      @id @default(autoincrement())
+  email              String   @unique
+  passwordHash       String
+  hashedRefreshToken String? // может быть null (если не залогинен)
+  tokenVersion       Int      @default(0)
+  role               Role     @default(HR)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}

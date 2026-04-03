@@ -1,106 +1,18 @@
-name: backnew-prod
+version: '3.8'
 
 services:
   postgres:
-    image: postgres:17-alpine
-    env_file:
-      - ./.env
+    image: postgres:15
+    container_name: backend_postgres
+    restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-backnew}
-    expose:
-      - "5432"
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: backend_db
+    ports:
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-backnew}",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
-
-  auth-service:
-    build:
-      context: ./services/auth-service
-      target: production
-    env_file:
-      - ./.env
-    environment:
-      PORT: 3001
-      DATABASE_URL: ${AUTH_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/backnew?schema=auth}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    expose:
-      - "3001"
-    restart: unless-stopped
-
-  auth-gate:
-    build:
-      context: ./services/auth-gate
-      target: production
-    env_file:
-      - ./.env
-    environment:
-      PORT: 3002
-    expose:
-      - "3002"
-    restart: unless-stopped
-
-  posts-service:
-    build:
-      context: ./services/posts-service
-      target: production
-    env_file:
-      - ./.env
-    environment:
-      PORT: 3003
-      DATABASE_URL: ${POSTS_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/backnew?schema=posts}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    expose:
-      - "3003"
-    restart: unless-stopped
-
-  notes-service:
-    build:
-      context: ./services/notes-service
-      target: production
-    env_file:
-      - ./.env
-    environment:
-      PORT: 3004
-      NOTES_DATABASE_URL: ${NOTES_DATABASE_URL:-postgresql+psycopg2://postgres:postgres@postgres:5432/backnew}
-      NOTES_DB_SCHEMA: ${NOTES_DB_SCHEMA:-notes}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    expose:
-      - "3004"
-    restart: unless-stopped
-
-  auth-proxy:
-    build:
-      context: ./services/auth-proxy
-      target: production
-    env_file:
-      - ./.env
-    environment:
-      PORT: 3000
-    depends_on:
-      - auth-service
-      - auth-gate
-      - posts-service
-      - notes-service
-    ports:
-      - "3000:3000"
-    restart: unless-stopped
 
 volumes:
   postgres_data:
