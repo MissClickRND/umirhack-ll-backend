@@ -53,6 +53,10 @@ Set these in repository settings:
 /opt/umirhack/backend
 ```
 
+Recommended value: path to backend folder itself.
+
+Also supported: superproject root path (for example `/opt/umirhack`), in this case deploy script auto-detects `backend/docker-compose.prod.yml`.
+
 ## VPS deploy via Docker
 
 For VPS deploy use:
