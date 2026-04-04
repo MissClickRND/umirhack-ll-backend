@@ -34,7 +34,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
 
   async validate(
     req: Request,
-    payload: { sub: number; email: string },
+    payload: { sub: string; email: string },
   ): Promise<AuthUserWithRefresh> {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },

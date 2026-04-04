@@ -3,8 +3,8 @@ import { Role } from '@prisma/client';
 
 /** Тело user после login (без role) */
 export class AuthUserBriefDto {
-  @ApiProperty({ example: 1 })
-  id: number;
+  @ApiProperty({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
+  id: string;
 
   @ApiProperty({ example: 'user@example.com' })
   email: string;
@@ -21,8 +21,8 @@ export class LogoutResponseDto {
 }
 
 export class AuthStatusUserDto {
-  @ApiProperty({ example: 1 })
-  id: number;
+  @ApiProperty({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
+  id: string;
 
   @ApiProperty({ example: 'user@example.com' })
   email: string;

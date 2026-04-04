@@ -10,10 +10,10 @@ export class AttachDiplomaResponseDto {
   id: string;
 
   @ApiProperty({
-    example: 42,
+    example: 'e5f6a7b8-c9d0-1234-ef01-345678901234',
     description: 'Идентификатор студента, к которому привязан диплом',
   })
-  userId: number;
+  userId: string | null;
 
   @ApiProperty({
     example: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
@@ -23,7 +23,7 @@ export class AttachDiplomaResponseDto {
 
   @ApiProperty({
     enum: DiplomaStatus,
-    example: DiplomaStatus.ACTIVE,
+    example: DiplomaStatus.ISSUED,
     description: 'Статус диплома в системе',
   })
   status: DiplomaStatus;

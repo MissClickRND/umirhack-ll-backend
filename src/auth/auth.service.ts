@@ -94,29 +94,20 @@ export class AuthService {
               tokenVersion: true,
             },
           })
-        : await this.prisma.$transaction(async (tx) => {
+        : await (async () => {
             if (!dto.name?.trim() || !dto.short_name?.trim()) {
               throw new BadRequestException(
                 'University name and short_name are required',
               );
             }
 
-            const university = await tx.university.create({
-              data: {
-                name: dto.name.trim(),
-                shortName: dto.short_name.trim(),
-              },
-              select: {
-                id: true,
-              },
-            });
-
-            return tx.user.create({
+            return this.prisma.user.create({
               data: {
                 email,
                 passwordHash,
                 role: Role.NEED_VERIFICATION,
-                universityId: university.id,
+                pendingUniversityName: dto.name.trim(),
+                pendingUniversityShortName: dto.short_name.trim(),
               },
               select: {
                 email: true,
@@ -125,7 +116,7 @@ export class AuthService {
                 tokenVersion: true,
               },
             });
-          });
+          })();
 
     const tokens = await this.issueTokens(
       user.id,
@@ -171,7 +162,7 @@ export class AuthService {
     return { user: safeUser, ...tokens };
   }
 
-  async logout(userId: number) {
+  async logout(userId: string) {
     await this.prisma.user.update({
       where: { id: userId },
       data: { hashedRefreshToken: null, tokenVersion: { increment: 1 } },
@@ -180,7 +171,7 @@ export class AuthService {
     return { ok: true };
   }
 
-  async refreshTokens(userId: number, refreshTokenFromCookie: string) {
+  async refreshTokens(userId: string, refreshTokenFromCookie: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -216,7 +207,7 @@ export class AuthService {
     };
   }
 
-  private async setRefreshTokenHash(userId: number, refreshToken: string) {
+  private async setRefreshTokenHash(userId: string, refreshToken: string) {
     const hash = await bcrypt.hash(refreshToken, 10);
     await this.prisma.user.update({
       where: { id: userId },
@@ -225,7 +216,7 @@ export class AuthService {
   }
 
   private async issueTokens(
-    userId: number,
+    userId: string,
     email: string,
     role: Role,
     tokenVersion: number,
