@@ -74,4 +74,18 @@ export class DiplomaCryptoResolverService {
 
     return decrypted;
   }
+
+  encryptRuntimeToken(token: string): string {
+    return this.cryptoService.encryptSymmetric(
+      token,
+      this.getMasterSymmetricKey(),
+    );
+  }
+
+  decryptRuntimeToken(stored: string): string {
+    return this.cryptoService.decryptSymmetric(
+      stored,
+      this.getMasterSymmetricKey(),
+    );
+  }
 }
