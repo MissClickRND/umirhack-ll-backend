@@ -82,6 +82,68 @@ export class DiplomasService {
     }
   }
 
+  private toHumanDiploma(
+    diploma: Prisma.DiplomaGetPayload<{
+      include: {
+        university: true;
+      };
+    }> & {
+      tokens?: Prisma.DiplomaTokenUncheckedCreateInput[];
+    },
+  ) {
+    if (!diploma.university.encryptedSymmetricKey) {
+      throw new BadRequestException('University has no symmetric key');
+    }
+
+    const symmetricKey = this.resolveUniversitySymmetricKey(
+      diploma.university.encryptedSymmetricKey,
+    );
+
+    const fullNameAuthor = this.cryptoService.decryptSymmetric(
+      diploma.fullNameAuthorEncrypted,
+      symmetricKey,
+    );
+
+    const registrationNumber = this.cryptoService.decryptSymmetric(
+      diploma.registrationNumberEncrypted,
+      symmetricKey,
+    );
+
+    const tokens = Array.isArray(diploma.tokens) ? diploma.tokens : null;
+
+    return {
+      id: diploma.id,
+      fullNameAuthor,
+      registrationNumber,
+      userId: diploma.userId,
+      universityId: diploma.universityId,
+      issuedAt: diploma.issuedAt,
+      specialty: diploma.specialty,
+      degreeLevel: diploma.degreeLevel,
+      status: diploma.status,
+      createdAt: diploma.createdAt,
+      updatedAt: diploma.updatedAt,
+      university: {
+        id: diploma.university.id,
+        name: diploma.university.name,
+        shortName: diploma.university.shortName,
+      },
+      ...(tokens
+        ? {
+            tokens: tokens.map((t) => ({
+              id: t.id,
+              diplomaId: t.diplomaId,
+              expiresAt: t.expiresAt,
+              revokedAt: t.revokedAt,
+              isOneTime: t.isOneTime,
+              lastUsedAt: t.lastUsedAt,
+              createdAt: t.createdAt,
+            })),
+          }
+        : {}),
+    };
+  }
+
   async createBatch(dto: CreateDiplomaBatchDto, requesterUserId?: number) {
     let requesterUniversityId: number | null = null;
 
@@ -227,12 +289,14 @@ export class DiplomasService {
       throw new NotFoundException('University not found');
     }
 
-    return this.prisma.diploma.findMany({
+    const diplomas = await this.prisma.diploma.findMany({
       where: { universityId: targetUniversityId },
       include: {
         university: true,
       },
     });
+
+    return diplomas.map((d) => this.toHumanDiploma(d));
   }
 
   async findByUser(userId: number) {
@@ -240,7 +304,7 @@ export class DiplomasService {
       throw new BadRequestException('Invalid userId');
     }
 
-    return this.prisma.diploma.findMany({
+    const diplomas = await this.prisma.diploma.findMany({
       where: {
         userId,
       },
@@ -248,6 +312,8 @@ export class DiplomasService {
         university: true,
       },
     });
+
+    return diplomas.map((d) => this.toHumanDiploma(d));
   }
 
   async findById(id: number) {
@@ -263,7 +329,7 @@ export class DiplomasService {
       throw new NotFoundException('Diploma not found');
     }
 
-    return diploma;
+    return this.toHumanDiploma(diploma);
   }
 
   async update(id: number, dto: UpdateDiplomaStatusDto) {
@@ -275,12 +341,25 @@ export class DiplomasService {
       throw new NotFoundException('Diploma not found');
     }
 
-    return this.prisma.diploma.update({
+    await this.prisma.diploma.update({
       where: { id },
       data: {
         status: dto.status,
       },
     });
+
+    const updated = await this.prisma.diploma.findUnique({
+      where: { id },
+      include: {
+        university: true,
+      },
+    });
+
+    if (!updated) {
+      throw new NotFoundException('Diploma not found');
+    }
+
+    return this.toHumanDiploma(updated);
   }
 
   async createQrToken(
@@ -428,7 +507,7 @@ export class DiplomasService {
       },
     });
 
-    return diploma;
+    return this.toHumanDiploma(diploma);
   }
 
   async revokeQrToken(diplomaId: number) {
@@ -472,6 +551,6 @@ export class DiplomasService {
       throw new NotFoundException('Diploma not found');
     }
 
-    return diploma;
+    return this.toHumanDiploma(diploma);
   }
 }

@@ -65,20 +65,11 @@ export class DiplomasController {
     return this.diplomasService.findByUser(userId);
   }
 
-  // 4. GET BY ID
+  // 4. REVOKE
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Получить диплом по ID' })
-  @ApiParam({ name: 'id', description: 'ID диплома' })
-  getById(@Param('id', ParseIntPipe) id: number) {
-    return this.diplomasService.findById(id);
-  }
-
-  // 5. UPDATE / REVOKE
-
-  @Roles('UNIVERSITY')
+  @Roles('UNIVERSITY', 'ADMIN')
   @Patch(':id')
-  @ApiOperation({ summary: 'Обновить или отозвать диплом' })
+  @ApiOperation({ summary: 'Отозвать диплом' })
   @ApiParam({ name: 'id', description: 'ID диплома' })
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -87,7 +78,7 @@ export class DiplomasController {
     return this.diplomasService.update(id, dto);
   }
 
-  // 6. CREATE QR TOKEN
+  // 5. CREATE QR TOKEN
 
   @Roles('STUDENT')
   @Post(':id/qr-token')
@@ -102,7 +93,7 @@ export class DiplomasController {
     return this.diplomasService.createQrToken(id, dto, user.id);
   }
 
-  // 7. GET BY QR TOKEN
+  // 6. GET BY QR TOKEN
 
   @Public()
   @Get('qr-token')
@@ -112,7 +103,7 @@ export class DiplomasController {
     return this.diplomasService.findByQrToken(token);
   }
 
-  // 8. SEARCH BY NUMBER
+  // 7. SEARCH BY NUMBER
   // GET /diplomas/search?number=...
 
   @Public()
@@ -121,5 +112,14 @@ export class DiplomasController {
   @ApiQuery({ name: 'number', description: 'Номер диплома', required: true })
   search(@Query('number') number: string) {
     return this.diplomasService.searchByNumber(number);
+  }
+
+  // 8. GET BY ID
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Получить диплом по ID' })
+  @ApiParam({ name: 'id', description: 'ID диплома' })
+  getById(@Param('id', ParseIntPipe) id: number) {
+    return this.diplomasService.findById(id);
   }
 }

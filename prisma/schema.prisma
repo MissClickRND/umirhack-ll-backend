@@ -101,7 +101,6 @@ model University {
 }
 
 enum DiplomaStatus {
-  ISSUED
   VALID
   REVOKED
 }
