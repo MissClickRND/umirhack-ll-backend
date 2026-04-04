@@ -32,24 +32,95 @@ export class UsersService {
     return key;
   }
 
-  async getAll(page?: number, limit?: number) {
+  async getAll(page?: number, limit?: number, search?: string) {
     const safePage = !page || page < 1 ? 1 : page;
     const safeLimit = !limit || limit < 1 || limit > 50 ? 10 : limit;
     const skip = (safePage - 1) * safeLimit;
+    const normalizedSearch = search?.trim() ?? '';
 
-    const total = await this.prisma.user.count();
+    const searchAsId = Number.parseInt(normalizedSearch, 10);
+    const isDigitsOnly = /^\d+$/.test(normalizedSearch);
+    const hasSearchId =
+      normalizedSearch.length > 0 &&
+      isDigitsOnly &&
+      Number.isInteger(searchAsId) &&
+      searchAsId > 0;
 
-    const data = await this.prisma.user.findMany({
+    const normalizedRole = normalizedSearch.toUpperCase() as PrismaRole;
+    const hasSearchRole = Object.values(PrismaRole).includes(normalizedRole);
+
+    const where: Prisma.UserWhereInput | undefined =
+      normalizedSearch.length > 0
+        ? {
+            OR: [
+              {
+                email: {
+                  contains: normalizedSearch,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                organization: {
+                  is: {
+                    shortName: {
+                      contains: normalizedSearch,
+                      mode: 'insensitive',
+                    },
+                  },
+                },
+              },
+              {
+                organization: {
+                  is: {
+                    name: {
+                      contains: normalizedSearch,
+                      mode: 'insensitive',
+                    },
+                  },
+                },
+              },
+              {
+                pendingUniversityShortName: {
+                  contains: normalizedSearch,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                pendingUniversityName: {
+                  contains: normalizedSearch,
+                  mode: 'insensitive',
+                },
+              },
+              ...(hasSearchId ? [{ id: searchAsId }] : []),
+              ...(hasSearchRole ? [{ role: normalizedRole }] : []),
+            ],
+          }
+        : undefined;
+
+    const total = await this.prisma.user.count({ where });
+
+    const rows = await this.prisma.user.findMany({
+      where,
       select: {
         id: true,
         email: true,
         role: true,
         createdAt: true,
+        organization: {
+          select: {
+            shortName: true,
+          },
+        },
       },
       skip,
       take: safeLimit,
       orderBy: { createdAt: 'desc' },
     });
+
+    const data = rows.map(({ organization, ...rest }) => ({
+      ...rest,
+      universityShortName: organization?.shortName ?? null,
+    }));
 
     return {
       data,

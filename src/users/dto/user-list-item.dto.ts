@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 
 /** Элемент списка пользователей для GET /users (без чувствительных полей). */
@@ -24,4 +24,11 @@ export class UserListItemDto {
     description: 'Дата и время регистрации (ISO 8601)',
   })
   createdAt: Date;
+
+  @ApiPropertyOptional({
+    example: 'ДГТУ',
+    nullable: true,
+    description: 'Сокращенное название вуза пользователя',
+  })
+  universityShortName?: string | null;
 }
