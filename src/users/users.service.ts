@@ -133,10 +133,7 @@ export class UsersService {
     if (!u.publicKey?.trim() || !u.encryptedPrivateKey?.trim()) {
       const { publicKey, privateKey } = this.crypto.generateKeyPair();
       data.publicKey = publicKey;
-      data.encryptedPrivateKey = this.crypto.encryptSymmetric(
-        privateKey,
-        master,
-      );
+      data.encryptedPrivateKey = privateKey;
     }
     if (!u.encryptedSymmetricKey?.trim()) {
       const symm = this.crypto.generateSymmetricKey();
@@ -230,10 +227,6 @@ export class UsersService {
     const { publicKey, privateKey } = this.crypto.generateKeyPair();
     const symm = this.crypto.generateSymmetricKey();
     const encryptedSymmetricKey = this.crypto.encryptSymmetric(symm, master);
-    const encryptedPrivateKey = this.crypto.encryptSymmetric(
-      privateKey,
-      master,
-    );
 
     try {
       const after = await this.prisma.$transaction(async (tx) => {
@@ -249,7 +242,7 @@ export class UsersService {
           where: { id: university.id },
           data: {
             publicKey,
-            encryptedPrivateKey,
+            encryptedPrivateKey: privateKey,
             encryptedSymmetricKey,
           },
         });
