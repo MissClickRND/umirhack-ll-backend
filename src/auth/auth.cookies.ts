@@ -1,11 +1,11 @@
 import type { Response } from 'express';
 
 export type CookieOptionsShape = {
-    httpOnly: boolean;
-    secure: boolean;
-    sameSite: 'lax' | 'strict' | 'none';
-    path?: string;
-    maxAge: number;
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: 'lax' | 'strict' | 'none';
+  path?: string;
+  maxAge: number;
 };
 
 export function setAuthCookies(params: {

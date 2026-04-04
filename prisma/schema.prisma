@@ -15,14 +15,16 @@ enum Role {
 }
 
 model User {
-  id                 Int       @id @default(autoincrement())
-  email              String    @unique
+  id                 Int         @id @default(autoincrement())
+  email              String      @unique
   passwordHash       String
-  hashedRefreshToken String? // может быть null (если не залогинен)
-  tokenVersion       Int       @default(0)
-  role               Role      @default(HR)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  hashedRefreshToken String?
+  tokenVersion       Int         @default(0)
+  role               Role        @default(HR)
+  universityId       String?
+  university         University? @relation(fields: [universityId], references: [id], onDelete: SetNull)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
   diplomas           Diploma[]
 }
 
@@ -33,8 +35,8 @@ model Diploma {
   registrationNumberEncrypted String @map("registration_number")
   registrationNumberHash      String @unique @map("registration_number_hash")
 
-  userId Int  @map("user_id")
-  user   User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userId Int?  @map("user_id")
+  user   User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   universityId String     @map("university_id")
   university   University @relation(fields: [universityId], references: [id], onDelete: Restrict)
@@ -88,6 +90,7 @@ model University {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  users    User[]
   diplomas Diploma[]
 
   @@map("universities")

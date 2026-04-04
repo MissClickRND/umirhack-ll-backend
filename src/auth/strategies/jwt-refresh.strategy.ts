@@ -3,12 +3,12 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
-import type { AuthUserWithRefresh } from '../types/auth-user.type';
+import { AuthUserWithRefresh } from '../types/auth-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
 
+
 function cookieExtractorRefresh(req: Request): string | null {
-  const refreshCookieName = process.env.REFRESH_COOKIE_NAME ?? 'refreshToken';
-  return req?.cookies?.[refreshCookieName] ?? null;
+  return req?.cookies?.refreshToken ?? null;
 }
 
 @Injectable()
@@ -38,8 +38,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
 
     if (!user) throw new UnauthorizedException('User not found');
 
-    const refreshCookieName = process.env.REFRESH_COOKIE_NAME ?? 'refreshToken';
-    const refreshToken = req.cookies?.[refreshCookieName];
+    const refreshToken = req.cookies?.refreshToken;
 
     return {
       id: payload.sub,

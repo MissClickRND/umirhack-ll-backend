@@ -1,7 +1,6 @@
-import { NestFactory } from '@nestjs/core';
+﻿import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
-import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AllExceptionFilter } from './common/filters/all-exeption.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -24,32 +23,33 @@ function parseCorsCredentials(raw?: string): boolean {
 }
 
 async function bootstrap() {
-    const app = await NestFactory.create(AppModule);
-    app.useGlobalInterceptors(
-        new LoggingInterceptor(),
-    );
-    app.useGlobalFilters(new AllExceptionFilter());
+  const app = await NestFactory.create(AppModule);
 
-    app.use(cookieParser());
-    app.useGlobalPipes(
-        new ValidationPipe({
-            whitelist: true, 
-            forbidNonWhitelisted: true, 
-            transform: true, 
-        }),
-    );
+  app.useGlobalInterceptors(new LoggingInterceptor());
+  app.useGlobalFilters(new AllExceptionFilter());
 
-    const config = new DocumentBuilder()
-        .setTitle('API')
-        .setDescription('CRM API')
-        .setVersion('1.0')
-        .addCookieAuth('accessToken')
-        .build();
+  app.use(cookieParser());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
 
-    const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('docs', app, document);
+  const config = new DocumentBuilder()
+    .setTitle('API')
+    .setDescription('CRM API')
+    .setVersion('1.0')
+    .addCookieAuth('accessToken')
+    .build();
 
-  const corsOrigins = parseCorsOrigins(process.env.CORS_ORIGINS);
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('docs', app, document);
+
+  const corsOrigins = parseCorsOrigins(
+    process.env.CORS_ORIGINS ?? process.env.CORS_ORIGIN,
+  );
   const corsCredentials = parseCorsCredentials(process.env.CORS_CREDENTIALS);
 
   app.enableCors({
@@ -57,6 +57,7 @@ async function bootstrap() {
     origin: corsOrigins,
   });
 
-    await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3000);
 }
+
 bootstrap();
