@@ -16,6 +16,7 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { DiplomasService } from './diplomas.service';
 import { CreateDiplomaBatchDto } from './dto/create-diplomas-batch.dto';
 import { CreateQrTokenDto } from './dto/create-qr-token.dto';
@@ -27,6 +28,7 @@ import type { AuthUser } from 'src/auth/types/auth-user.type';
 
 @ApiTags('diplomas')
 @Controller('diplomas')
+@Throttle({ default: { limit: 8, ttl: 60_000 } })
 export class DiplomasController {
   constructor(private readonly diplomasService: DiplomasService) {}
 
