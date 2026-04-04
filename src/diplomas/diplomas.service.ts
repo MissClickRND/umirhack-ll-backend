@@ -106,22 +106,42 @@ export class DiplomasService {
         }
 
         const token = crypto.randomUUID();
-
         const tokenHash = this.cryptoService.hash(token);
+
+        const now = new Date();
+
+        let expiresAt: Date | null = null;
+        let isOneTime = false;
+
+        switch (dto.type) {
+            case 'DAYS_7':
+                expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                break;
+
+            case 'DAYS_30':
+                expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+                break;
+
+            case 'INFINITE':
+                expiresAt = null;
+                break;
+
+            case 'ONETIME':
+                isOneTime = true;
+                expiresAt = null; 
+                break;
+        }
 
         await this.prisma.diplomaToken.create({
             data: {
                 diplomaId,
                 tokenHash,
-                expiresAt: dto.expiresAt,
-                isOneTime: dto.isOneTime ?? false,
-                createdBy: 'system',
+                expiresAt,
+                isOneTime,
             },
         });
 
-        return {
-            token,
-        };
+        return { token };
     }
 
 
@@ -145,17 +165,14 @@ export class DiplomasService {
 
         const now = new Date();
 
-        // expiry check
         if (record.expiresAt && record.expiresAt < now) {
             throw new NotFoundException('Token expired');
         }
 
-        // revoked check
         if (record.revokedAt) {
             throw new NotFoundException('Token revoked');
         }
 
-        // one-time usage
         if (record.isOneTime && record.lastUsedAt) {
             throw new NotFoundException('Token already used');
         }

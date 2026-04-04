@@ -68,8 +68,6 @@ model DiplomaToken {
   isOneTime  Boolean   @default(false) @map("is_one_time")
   lastUsedAt DateTime? @map("last_used_at")
 
-  createdBy String @map("created_by")
-
   createdAt DateTime @default(now()) @map("created_at")
 
   diploma Diploma @relation(fields: [diplomaId], references: [id])

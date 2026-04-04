@@ -1,16 +1,15 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsDate, IsOptional } from 'class-validator';
-import { Type } from 'class-transformer';
+import { ApiProperty } from "@nestjs/swagger";
+import { IsEnum } from "class-validator";
+
+export enum QrTokenType {
+    ONETIME = 'ONETIME',
+    DAYS_7 = 'DAYS_7',
+    DAYS_30 = 'DAYS_30',
+    INFINITE = 'INFINITE',
+}
 
 export class CreateQrTokenDto {
-    @ApiPropertyOptional({ example: true })
-    @IsOptional()
-    @IsBoolean()
-    isOneTime?: boolean;
-    
-    @ApiPropertyOptional({ example: '2026-01-01' })
-    @IsOptional()
-    @Type(() => Date)
-    @IsDate()
-    expiresAt?: Date;
+    @ApiProperty({ enum: QrTokenType })
+    @IsEnum(QrTokenType)
+    type!: QrTokenType;
 }
