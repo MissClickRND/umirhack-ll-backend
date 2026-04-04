@@ -1,33 +1,21 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DegreeLevel, DiplomaStatus } from '@prisma/client';
+import { DiplomaStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../crypto/crypto.service';
-import { buildDiplomaSigningPayload } from '../diplomas/diploma-signing.js';
 import { BulkVerifyDiplomasDto } from './dto/bulk-verify-diplomas.dto';
-import type {
-  BulkVerifyDiplomaShortDto,
-  BulkVerifyDiplomaSuccessDto,
+import {
+  BulkVerifyDiplomaResponseDto,
+  PublicDiplomaDetailDto,
+  PublicDiplomaUserDto,
 } from './dto/bulk-verify-diploma-response.dto';
 
-export type BulkVerifyDiplomaItem =
-  | BulkVerifyDiplomaSuccessDto
-  | BulkVerifyDiplomaShortDto;
-
-function degreeLevelToQualification(level: DegreeLevel): string {
-  switch (level) {
-    case DegreeLevel.BACHELOR:
-      return 'Бакалавр';
-    case DegreeLevel.MAGISTRACY:
-      return 'Магистр';
-    case DegreeLevel.SPECIALIST:
-      return 'Специалист';
-    case DegreeLevel.DOCTORATE:
-      return 'Доктор наук';
-    default:
-      return level;
-  }
-}
+const DIPLOMA_NUMBER_RE = /^\d{13}$/;
 
 @Injectable()
 export class PublicApiServiseService {
@@ -49,137 +37,216 @@ export class PublicApiServiseService {
     return key;
   }
 
-  async verifyBatch(
-    dto: BulkVerifyDiplomasDto,
-  ): Promise<BulkVerifyDiplomaItem[]> {
-    const masterSymmetricKey = this.getDiplomaSymmetricKey();
-    const numbers = dto.diplomaNumbers;
+  private assertDiplomaNumberFormat(diplomaNumber: string): void {
+    if (!DIPLOMA_NUMBER_RE.test(diplomaNumber)) {
+      throw new BadRequestException(
+        'Diploma number must be a string with exactly 13 digits',
+      );
+    }
+  }
 
-    const seenHashes = new Set<string>();
-    const uniqueHashes: string[] = [];
-    for (const num of numbers) {
-      const h = this.cryptoService.hash(num);
-      if (!seenHashes.has(h)) {
-        seenHashes.add(h);
-        uniqueHashes.push(h);
-      }
+  private resolveUniversitySymmetricKey(
+    stored: string,
+    master: string,
+  ): string | null {
+    const trimmed = stored?.trim();
+    if (!trimmed) {
+      return null;
     }
 
-    const rows = await this.prisma.diploma.findMany({
-      where: { registrationNumberHash: { in: uniqueHashes } },
-      include: { university: true },
+    if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+      return trimmed;
+    }
+
+    try {
+      const decrypted = this.cryptoService
+        .decryptSymmetric(trimmed, master)
+        .trim();
+      return /^[0-9a-fA-F]{64}$/.test(decrypted) ? decrypted : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private buildUserInfo(input: {
+    user: { id: number; email: string } | null;
+    fullName: string | null;
+  }): PublicDiplomaUserDto | null {
+    const hasAnyUserInfo = Boolean(input.user) || Boolean(input.fullName);
+
+    if (!hasAnyUserInfo) {
+      return null;
+    }
+
+    return {
+      id: input.user?.id ?? null,
+      email: input.user?.email ?? null,
+      fullName: input.fullName,
+    };
+  }
+
+  private async lookupByNumber(
+    diplomaNumber: string,
+  ): Promise<BulkVerifyDiplomaResponseDto> {
+    const hash = this.cryptoService.hash(diplomaNumber);
+
+    const diploma = await this.prisma.diploma.findFirst({
+      where: { registrationNumberHash: hash },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+        university: {
+          select: {
+            encryptedSymmetricKey: true,
+          },
+        },
+      },
     });
 
-    const hashToDiploma = new Map(
-      rows.map((d) => [d.registrationNumberHash, d] as const),
-    );
-
-    const results: BulkVerifyDiplomaItem[] = [];
-
-    for (const diplomaNumber of numbers) {
-      const hash = this.cryptoService.hash(diplomaNumber);
-      const diploma = hashToDiploma.get(hash);
-
-      if (!diploma) {
-        results.push({
-          diplomaNumber,
-          valid: false,
-          reason: 'NOT_FOUND',
-        });
-        continue;
-      }
-
-      const short = (): BulkVerifyDiplomaShortDto => ({
+    if (!diploma) {
+      return {
         diplomaNumber,
-        valid: false,
-        status: diploma.status,
-        reason: 'INVALID_OR_REVOKED',
-      });
-
-      if (!diploma.signature?.trim()) {
-        results.push(short());
-        continue;
-      }
-      const pub = diploma.university.publicKey;
-      if (!pub?.trim()) {
-        results.push(short());
-        continue;
-      }
-
-      const storedUniversitySymmetricKey =
-        diploma.university.encryptedSymmetricKey;
-      if (!storedUniversitySymmetricKey?.trim()) {
-        results.push(short());
-        continue;
-      }
-
-      let universitySymmetricKey: string;
-      try {
-        const trimmed = storedUniversitySymmetricKey.trim();
-        if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
-          universitySymmetricKey = trimmed;
-        } else {
-          universitySymmetricKey = this.cryptoService
-            .decryptSymmetric(trimmed, masterSymmetricKey)
-            .trim();
-        }
-      } catch {
-        results.push(short());
-        continue;
-      }
-
-      if (!/^[0-9a-fA-F]{64}$/.test(universitySymmetricKey)) {
-        results.push(short());
-        continue;
-      }
-
-      let fullNameAuthor: string;
-      let registrationNumber: string;
-      try {
-        fullNameAuthor = this.cryptoService.decryptSymmetric(
-          diploma.fullNameAuthorEncrypted,
-          universitySymmetricKey,
-        );
-        registrationNumber = this.cryptoService.decryptSymmetric(
-          diploma.registrationNumberEncrypted,
-          universitySymmetricKey,
-        );
-      } catch {
-        results.push(short());
-        continue;
-      }
-
-      const payload = buildDiplomaSigningPayload({
-        fullNameAuthor,
-        registrationNumber,
-        universityId: diploma.universityId,
-        issuedAtIso: diploma.issuedAt.toISOString(),
-      });
-
-      const signatureOk = this.cryptoService.verify(
-        payload,
-        diploma.signature,
-        pub,
-      );
-
-      if (!signatureOk || diploma.status !== DiplomaStatus.VALID) {
-        results.push(short());
-        continue;
-      }
-
-      const universityName =
-        diploma.university.shortName?.trim() || diploma.university.name;
-
-      results.push({
-        valid: true,
-        status: 'VALID',
-        fullName: fullNameAuthor,
-        university: universityName,
-        qualification: degreeLevelToQualification(diploma.degreeLevel),
-        issuedAt: diploma.issuedAt.toISOString().slice(0, 10),
-      });
+        status: DiplomaStatus.REVOKED,
+        user: null,
+      };
     }
 
-    return results;
+    let fullName: string | null = null;
+    const masterSymmetricKey = this.getDiplomaSymmetricKey();
+    const universityKey = this.resolveUniversitySymmetricKey(
+      diploma.university.encryptedSymmetricKey ?? '',
+      masterSymmetricKey,
+    );
+
+    if (universityKey) {
+      try {
+        fullName = this.cryptoService.decryptSymmetric(
+          diploma.fullNameAuthorEncrypted,
+          universityKey,
+        );
+      } catch {
+        fullName = null;
+      }
+    }
+
+    return {
+      diplomaNumber,
+      status: diploma.status,
+      user: this.buildUserInfo({ user: diploma.user, fullName }),
+    };
+  }
+
+  async verifyOne(
+    diplomaNumber: string,
+  ): Promise<BulkVerifyDiplomaResponseDto> {
+    this.assertDiplomaNumberFormat(diplomaNumber);
+    return this.lookupByNumber(diplomaNumber);
+  }
+
+  async getDiplomaByNumber(
+    diplomaNumber: string,
+  ): Promise<PublicDiplomaDetailDto> {
+    this.assertDiplomaNumberFormat(diplomaNumber);
+
+    const hash = this.cryptoService.hash(diplomaNumber);
+    const diploma = await this.prisma.diploma.findFirst({
+      where: { registrationNumberHash: hash },
+      include: {
+        university: {
+          select: {
+            id: true,
+            name: true,
+            shortName: true,
+            encryptedSymmetricKey: true,
+          },
+        },
+      },
+    });
+
+    if (!diploma) {
+      throw new NotFoundException('Diploma not found');
+    }
+
+    const masterSymmetricKey = this.getDiplomaSymmetricKey();
+    const universitySymmetricKey = this.resolveUniversitySymmetricKey(
+      diploma.university.encryptedSymmetricKey ?? '',
+      masterSymmetricKey,
+    );
+
+    if (!universitySymmetricKey) {
+      throw new BadRequestException('University symmetric key is invalid');
+    }
+
+    let fullNameAuthor: string;
+    let registrationNumber: string;
+
+    try {
+      fullNameAuthor = this.cryptoService.decryptSymmetric(
+        diploma.fullNameAuthorEncrypted,
+        universitySymmetricKey,
+      );
+
+      registrationNumber = this.cryptoService.decryptSymmetric(
+        diploma.registrationNumberEncrypted,
+        universitySymmetricKey,
+      );
+    } catch {
+      throw new BadRequestException(
+        'Diploma data is encrypted with invalid key',
+      );
+    }
+
+    return {
+      id: diploma.id,
+      fullNameAuthor,
+      registrationNumber,
+      specialty: diploma.specialty,
+      degreeLevel: diploma.degreeLevel,
+      status: diploma.status,
+      university: {
+        id: diploma.university.id,
+        name: diploma.university.name,
+        shortName: diploma.university.shortName,
+      },
+    };
+  }
+
+  async verifyMany(
+    diplomaNumbers: string[],
+  ): Promise<BulkVerifyDiplomaResponseDto[]> {
+    diplomaNumbers.forEach((number) => this.assertDiplomaNumberFormat(number));
+
+    return Promise.all(
+      diplomaNumbers.map((number) => this.lookupByNumber(number)),
+    );
+  }
+
+  async verify(
+    dto: BulkVerifyDiplomasDto,
+  ): Promise<BulkVerifyDiplomaResponseDto | BulkVerifyDiplomaResponseDto[]> {
+    const hasSingle = typeof dto.diplomaNumber === 'string';
+    const hasMany = Array.isArray(dto.diplomaNumbers);
+
+    if (hasSingle === hasMany) {
+      throw new BadRequestException(
+        'Provide either diplomaNumber (single) or diplomaNumbers (array)',
+      );
+    }
+
+    if (hasSingle) {
+      return this.verifyOne(dto.diplomaNumber!);
+    }
+
+    if (!dto.diplomaNumbers) {
+      throw new BadRequestException(
+        'diplomaNumbers must be provided for batch verification',
+      );
+    }
+
+    return this.verifyMany(dto.diplomaNumbers);
   }
 }

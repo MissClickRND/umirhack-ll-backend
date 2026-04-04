@@ -1,39 +1,75 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { DiplomaStatus } from '@prisma/client';
 
-export class BulkVerifyDiplomaSuccessDto {
-  @ApiProperty({ example: true })
-  valid!: true;
+export class PublicDiplomaUniversityDto {
+  @ApiProperty({ example: 1 })
+  id!: number;
 
-  @ApiProperty({ example: 'VALID' })
-  status!: 'VALID';
+  @ApiProperty({ example: 'Донской Государственный Технический Университет' })
+  name!: string;
 
-  @ApiProperty({ example: 'Иванов Иван Иванович' })
-  fullName!: string;
-
-  @ApiProperty({ example: 'МГУ' })
-  university!: string;
-
-  @ApiProperty({ example: 'Бакалавр' })
-  qualification!: string;
-
-  @ApiProperty({ example: '2025-06-30' })
-  issuedAt!: string;
+  @ApiPropertyOptional({ example: 'ДГТУ', nullable: true })
+  shortName!: string | null;
 }
 
-export class BulkVerifyDiplomaShortDto {
-  @ApiProperty({ example: 'ABC-123' })
-  diplomaNumber!: string;
+export class PublicDiplomaDetailDto {
+  @ApiProperty({ example: 2 })
+  id!: number;
 
-  @ApiProperty({ example: false })
-  valid!: false;
+  @ApiProperty({ example: 'Кукареков Кукаречкич Кукарекович' })
+  fullNameAuthor!: string;
 
-  @ApiPropertyOptional({ enum: DiplomaStatus, example: DiplomaStatus.REVOKED })
-  status?: DiplomaStatus;
+  @ApiProperty({ example: '1111111111111' })
+  registrationNumber!: string;
+
+  @ApiProperty({ example: 'ИиВТ' })
+  specialty!: string;
+
+  @ApiProperty({ example: 'BACHELOR' })
+  degreeLevel!: string;
+
+  @ApiProperty({ enum: DiplomaStatus, example: DiplomaStatus.REVOKED })
+  status!: DiplomaStatus;
+
+  @ApiProperty({ type: PublicDiplomaUniversityDto })
+  university!: PublicDiplomaUniversityDto;
+}
+
+export class PublicDiplomaUserDto {
+  @ApiPropertyOptional({
+    example: 2,
+    nullable: true,
+    description: 'ID пользователя, если диплом привязан к аккаунту',
+  })
+  id!: number | null;
 
   @ApiPropertyOptional({
-    enum: ['NOT_FOUND', 'INVALID_OR_REVOKED'],
-    example: 'NOT_FOUND',
+    example: 'student@example.com',
+    nullable: true,
+    description: 'Email пользователя, если диплом привязан к аккаунту',
   })
-  reason?: 'NOT_FOUND' | 'INVALID_OR_REVOKED';
+  email!: string | null;
+
+  @ApiPropertyOptional({
+    example: 'Иванов Иван Сергеевич',
+    nullable: true,
+    description: 'ФИО владельца диплома',
+  })
+  fullName!: string | null;
+}
+
+export class BulkVerifyDiplomaResponseDto {
+  @ApiProperty({ example: '1234567890123' })
+  diplomaNumber!: string;
+
+  @ApiProperty({ enum: DiplomaStatus, example: DiplomaStatus.VALID })
+  status!: DiplomaStatus;
+
+  @ApiProperty({
+    type: PublicDiplomaUserDto,
+    nullable: true,
+    description:
+      'Информация о пользователе/владельце диплома. Может быть null, если диплом не найден или не привязан.',
+  })
+  user!: PublicDiplomaUserDto | null;
 }
