@@ -86,8 +86,13 @@ jobs:
 
             cd "$PROJECT_DIR"
 
+            # Some VPS setups clone repo as root; allow git operations for this path.
+            git config --global --add safe.directory "$PROJECT_DIR" || true
+
             if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-              echo "Not a git repository: $PROJECT_DIR"
+              echo "Directory is not a git repository or git has no access: $PROJECT_DIR"
+              echo "Current directory listing:"
+              ls -la || true
               exit 1
             fi
 
