@@ -18,7 +18,10 @@ DROP TYPE "DiplomaStatus";
 ALTER TYPE "DiplomaStatus_new" RENAME TO "DiplomaStatus";
 
 -- Digital signature (hex); empty for legacy rows
-ALTER TABLE "diplomas" ADD COLUMN IF NOT EXISTS "signature" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "diplomas" ADD COLUMN IF NOT EXISTS "signature" TEXT;
+UPDATE "diplomas" SET "signature" = '' WHERE "signature" IS NULL;
+ALTER TABLE "diplomas" ALTER COLUMN "signature" SET DEFAULT '';
+ALTER TABLE "diplomas" ALTER COLUMN "signature" SET NOT NULL;
 
 -- User PK: INTEGER -> UUID
 ALTER TABLE "User" ADD COLUMN "new_id" UUID;

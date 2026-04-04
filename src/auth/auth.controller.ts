@@ -72,11 +72,7 @@ export class AuthController {
     const value = this.config.get<string>('COOKIE_DOMAIN')?.trim();
     if (!value) return undefined;
     const host = (req.hostname ?? '').toLowerCase();
-    if (
-      host === 'localhost' ||
-      host === '127.0.0.1' ||
-      host === '[::1]'
-    ) {
+    if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]') {
       return undefined;
     }
     return value;
@@ -270,13 +266,13 @@ export class AuthController {
   @ApiOperation({ summary: 'Вход по email и паролю' })
   @ApiOkResponse({
     description:
-      'Успешный вход. Токены в HttpOnly cookies (как при регистрации). В теле — user без поля role.',
+      'Успешный вход. Токены в HttpOnly cookies (как при регистрации). В теле — user с полем role.',
     type: LoginResponseDto,
     examples: {
       success: {
         summary: 'Успех',
         value: {
-          user: { id: 1, email: 'user@example.com' },
+          user: { id: 1, email: 'user@example.com', role: 'STUDENT' },
         },
       },
     },
@@ -441,7 +437,9 @@ export class AuthController {
 
   @ApiCookieAuth(ACCESS_COOKIE_NAME)
   @Post('logout')
-  @ApiOperation({ summary: 'Выход: сброс cookies и инвалидация refresh на сервере' })
+  @ApiOperation({
+    summary: 'Выход: сброс cookies и инвалидация refresh на сервере',
+  })
   @ApiOkResponse({
     description: 'Cookies очищены',
     type: LogoutResponseDto,

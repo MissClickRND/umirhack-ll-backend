@@ -1,13 +1,20 @@
 import {
-    Body,
-    Controller,
-    Get,
-    Param,
-    Patch,
-    Post,
-    Query,
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
 } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { DiplomasService } from './diplomas.service';
 import { CreateDiplomaBatchDto } from './dto/create-diplomas-batch.dto';
 import { CreateQrTokenDto } from './dto/create-qr-token.dto';
@@ -20,89 +27,92 @@ import type { AuthUser } from 'src/auth/types/auth-user.type';
 @ApiTags('diplomas')
 @Controller('diplomas')
 export class DiplomasController {
-    constructor(private readonly diplomasService: DiplomasService) {}
+  constructor(private readonly diplomasService: DiplomasService) {}
 
-    // 1. CREATE BATCH
+  // 1. CREATE BATCH
 
-    @Roles("UNIVERSITY")
-    @Post('batch')
-    @ApiOperation({ summary: 'Создать batch дипломов' })
-    @ApiBody({ type: CreateDiplomaBatchDto })
-    createBatch(@Body() dto: CreateDiplomaBatchDto) {
-        return this.diplomasService.createBatch(dto);
-    }
+  @Roles('UNIVERSITY')
+  @Post('batch')
+  @ApiOperation({ summary: 'Создать batch дипломов' })
+  @ApiBody({ type: CreateDiplomaBatchDto })
+  createBatch(@Body() dto: CreateDiplomaBatchDto) {
+    return this.diplomasService.createBatch(dto);
+  }
 
-    // 2. GET BY UNIVERSITY
+  // 2. GET BY UNIVERSITY
 
-    @Roles("UNIVERSITY", "ADMIN")
-    @Get('university/:universityId')
-    @ApiOperation({ summary: 'Получить дипломы по университету' })
-    @ApiParam({ name: 'universityId', description: 'ID университета' })
-    getByUniversity(@Param('universityId') universityId: string) {
-        return this.diplomasService.findByUniversity(universityId);
-    }
+  @Roles('UNIVERSITY', 'ADMIN')
+  @Get('university/:universityId')
+  @ApiOperation({ summary: 'Получить дипломы по университету' })
+  @ApiParam({ name: 'universityId', description: 'ID университета' })
+  getByUniversity(@Param('universityId', ParseIntPipe) universityId: number) {
+    return this.diplomasService.findByUniversity(universityId);
+  }
 
-    // 3. GET BY USER
+  // 3. GET BY USER
 
-    @Get('user/:userId')
-    @ApiOperation({ summary: 'Получить дипломы пользователя' })
-    @ApiParam({ name: 'userId', description: 'ID пользователя' })
-    getByUser(@Param('userId') userId: string) {
-        return this.diplomasService.findByUser(userId);
-    }
+  @Get('user/:userId')
+  @ApiOperation({ summary: 'Получить дипломы пользователя' })
+  @ApiParam({ name: 'userId', description: 'ID пользователя' })
+  getByUser(@Param('userId', ParseIntPipe) userId: number) {
+    return this.diplomasService.findByUser(userId);
+  }
 
-    // 4. GET BY ID
+  // 4. GET BY ID
 
-    @Get(':id')
-    @ApiOperation({ summary: 'Получить диплом по ID' })
-    @ApiParam({ name: 'id', description: 'ID диплома' })
-    getById(@Param('id') id: string) {
-        return this.diplomasService.findById(id);
-    }
+  @Get(':id')
+  @ApiOperation({ summary: 'Получить диплом по ID' })
+  @ApiParam({ name: 'id', description: 'ID диплома' })
+  getById(@Param('id', ParseIntPipe) id: number) {
+    return this.diplomasService.findById(id);
+  }
 
-    // 5. UPDATE / REVOKE
+  // 5. UPDATE / REVOKE
 
-    @Roles("UNIVERSITY")
-    @Patch(':id')
-    @ApiOperation({ summary: 'Обновить или отозвать диплом' })
-    @ApiParam({ name: 'id', description: 'ID диплома' })
-    update(@Param('id') id: string, @Body() dto: UpdateDiplomaStatusDto) {
-        return this.diplomasService.update(id, dto);
-    }
+  @Roles('UNIVERSITY')
+  @Patch(':id')
+  @ApiOperation({ summary: 'Обновить или отозвать диплом' })
+  @ApiParam({ name: 'id', description: 'ID диплома' })
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateDiplomaStatusDto,
+  ) {
+    return this.diplomasService.update(id, dto);
+  }
 
-    // 6. CREATE QR TOKEN
+  // 6. CREATE QR TOKEN
 
-    @Roles("STUDENT")
-    @Post(':id/qr-token')
-    @ApiOperation({ summary: 'Создать QR-токен для диплома' })
-    @ApiParam({ name: 'id', description: 'ID диплома' })
-    @ApiBody({ type: CreateQrTokenDto })
-    createQrToken(
-        @Param('id') id: string,
-        @Body() dto: CreateQrTokenDto,
-        @CurrentUser() user: AuthUser,
-    ) {
-        return this.diplomasService.createQrToken(id, dto, user.id);
-    }
+  @Roles('STUDENT')
+  @Post(':id/qr-token')
+  @ApiOperation({ summary: 'Создать QR-токен для диплома' })
+  @ApiParam({ name: 'id', description: 'ID диплома' })
+  @ApiBody({ type: CreateQrTokenDto })
+  createQrToken(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateQrTokenDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.diplomasService.createQrToken(id, dto, user.id);
+  }
 
-    // 7. GET BY QR TOKEN
+  // 7. GET BY QR TOKEN
 
-    @Public()
-    @Get('qr-token')
-    @ApiOperation({ summary: 'Получить диплом по QR-токену' })
-    @ApiQuery({ name: 'token', description: 'QR токен', required: true })
-    getByQrToken(@Query('token') token: string) {
-        return this.diplomasService.findByQrToken(token);
-    }
+  @Public()
+  @Get('qr-token')
+  @ApiOperation({ summary: 'Получить диплом по QR-токену' })
+  @ApiQuery({ name: 'token', description: 'QR токен', required: true })
+  getByQrToken(@Query('token') token: string) {
+    return this.diplomasService.findByQrToken(token);
+  }
 
-    // 8. SEARCH BY NUMBER
-    // GET /diplomas/search?number=...
+  // 8. SEARCH BY NUMBER
+  // GET /diplomas/search?number=...
 
-    @Public()
-    @Get('search')
-    @ApiOperation({ summary: 'Поиск диплома по номеру' })
-    @ApiQuery({ name: 'number', description: 'Номер диплома', required: true })
-    search(@Query('number') number: string) {
-        return this.diplomasService.searchByNumber(number);
-    }
+  @Public()
+  @Get('search')
+  @ApiOperation({ summary: 'Поиск диплома по номеру' })
+  @ApiQuery({ name: 'number', description: 'Номер диплома', required: true })
+  search(@Query('number') number: string) {
+    return this.diplomasService.searchByNumber(number);
+  }
 }

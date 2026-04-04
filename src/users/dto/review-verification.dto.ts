@@ -8,7 +8,10 @@ export enum VerificationAction {
 }
 
 export class ReviewVerificationDto {
-  @ApiProperty({ enum: VerificationAction, example: VerificationAction.APPROVE })
+  @ApiProperty({
+    enum: VerificationAction,
+    example: VerificationAction.APPROVE,
+  })
   @IsEnum(VerificationAction)
   action: VerificationAction;
 }
@@ -16,10 +19,10 @@ export class ReviewVerificationDto {
 /** Снимок пользователя в ответе PATCH /verify/:id (без пароля и токенов). */
 export class VerificationUserSnapshotDto {
   @ApiProperty({
-    example: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
+    example: 3,
     description: 'Идентификатор пользователя',
   })
-  id: string;
+  id: number;
 
   @ApiProperty({ example: 'rep@university.ru', description: 'Email' })
   email: string;

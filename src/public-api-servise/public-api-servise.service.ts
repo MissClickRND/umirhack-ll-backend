@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { DegreeLevel, DiplomaStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../crypto/crypto.service';
-import { buildDiplomaSigningPayload } from '../diplomas/diploma-signing';
+import { buildDiplomaSigningPayload } from '../diplomas/diploma-signing.js';
 import { BulkVerifyDiplomasDto } from './dto/bulk-verify-diplomas.dto';
 import type {
   BulkVerifyDiplomaShortDto,
@@ -49,7 +49,9 @@ export class PublicApiServiseService {
     return key;
   }
 
-  async verifyBatch(dto: BulkVerifyDiplomasDto): Promise<BulkVerifyDiplomaItem[]> {
+  async verifyBatch(
+    dto: BulkVerifyDiplomasDto,
+  ): Promise<BulkVerifyDiplomaItem[]> {
     const symmetricKey = this.getDiplomaSymmetricKey();
     const numbers = dto.diplomaNumbers;
 
@@ -118,13 +120,10 @@ export class PublicApiServiseService {
       }
 
       const payload = buildDiplomaSigningPayload({
-        id: diploma.id,
         fullNameAuthor,
         registrationNumber,
         universityId: diploma.universityId,
         issuedAtIso: diploma.issuedAt.toISOString(),
-        specialty: diploma.specialty,
-        degreeLevel: diploma.degreeLevel,
       });
 
       const signatureOk = this.cryptoService.verify(

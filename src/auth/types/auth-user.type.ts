@@ -3,7 +3,7 @@ import type { Role as PrismaRole } from '@prisma/client';
 export type Role = PrismaRole;
 
 export type AuthUser = {
-  id: string;
+  id: number;
   email: string;
   role: Role;
 };

@@ -5,4 +5,4 @@
 
 */
 -- AlterTable
-ALTER TABLE "diploma_tokens" DROP COLUMN "created_by";
+ALTER TABLE IF EXISTS "diploma_tokens" DROP COLUMN IF EXISTS "created_by";

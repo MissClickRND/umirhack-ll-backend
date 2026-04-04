@@ -59,6 +59,15 @@ async function bootstrap() {
       },
     },
   });
+  SwaggerModule.setup('api', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+      requestInterceptor: (req: { credentials?: RequestCredentials }) => {
+        req.credentials = 'include';
+        return req;
+      },
+    },
+  });
 
   const corsOrigins = parseCorsOrigins(
     process.env.CORS_ORIGINS ?? process.env.CORS_ORIGIN,

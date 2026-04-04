@@ -3,17 +3,14 @@ import {
   Controller,
   Get,
   Param,
-  ParseUUIDPipe,
+  ParseIntPipe,
   Patch,
 } from '@nestjs/common';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import type { AuthUser } from 'src/auth/types/auth-user.type';
 import { UsersService } from './users.service';
-import {
-  UpdateRoleDto,
-  UpdateRoleResponseDto,
-} from './dto/update-role.dto';
+import { UpdateRoleDto, UpdateRoleResponseDto } from './dto/update-role.dto';
 import {
   ApiCookieAuth,
   ApiOkResponse,
@@ -44,13 +41,13 @@ export class UsersController {
     isArray: true,
     example: [
       {
-        id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        id: 1,
         email: 'admin@example.com',
         role: 'ADMIN',
         createdAt: '2025-01-10T08:00:00.000Z',
       },
       {
-        id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
+        id: 2,
         email: 'student@example.com',
         role: 'STUDENT',
         createdAt: '2025-01-12T14:20:00.000Z',
@@ -71,18 +68,18 @@ export class UsersController {
     isArray: true,
     example: [
       {
-        id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
+        id: 3,
         email: 'rep@university.ru',
         role: 'NEED_VERIFICATION',
         createdAt: '2025-01-10T08:00:00.000Z',
         university: {
-          id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+          id: 10,
           name: 'Московский государственный университет',
           shortName: 'МГУ',
         },
       },
       {
-        id: 'd4e5f6a7-b8c9-0123-def0-234567890123',
+        id: 4,
         email: 'newuser@example.com',
         role: 'NEED_VERIFICATION',
         createdAt: '2025-01-12T14:20:00.000Z',
@@ -107,12 +104,12 @@ export class UsersController {
     type: ReviewVerificationResponseDto,
     example: {
       before: {
-        id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
+        id: 3,
         email: 'rep@university.ru',
         role: 'NEED_VERIFICATION',
       },
       after: {
-        id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
+        id: 3,
         email: 'rep@university.ru',
         role: 'UNIVERSITY',
       },
@@ -121,13 +118,12 @@ export class UsersController {
   @Roles('ADMIN')
   @Patch('verify/:id')
   reviewVerificationRequest(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() dto: ReviewVerificationDto,
   ) {
     return this.users.reviewVerificationRequest({
       userId: id,
-      action:
-        dto.action === VerificationAction.APPROVE ? 'approve' : 'reject',
+      action: dto.action === VerificationAction.APPROVE ? 'approve' : 'reject',
     });
   }
 
@@ -138,12 +134,12 @@ export class UsersController {
     type: UpdateRoleResponseDto,
     example: {
       before: {
-        id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
+        id: 2,
         email: 'user@example.com',
         role: 'STUDENT',
       },
       after: {
-        id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
+        id: 2,
         email: 'user@example.com',
         role: 'HR',
       },
@@ -161,15 +157,18 @@ export class UsersController {
       'Обновлённая запись диплома после привязки: id, userId (текущий студент), universityId, status. Персональные поля (ФИО, регистрационный номер и т.д.) не возвращаются.',
     type: AttachDiplomaResponseDto,
     example: {
-      id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-      userId: 'e5f6a7b8-c9d0-1234-ef01-345678901234',
-      universityId: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
+      id: 100,
+      userId: 2,
+      universityId: 10,
       status: 'ISSUED',
     },
   })
   @Roles('STUDENT')
   @Patch('users/me/diplomas/:id/attach')
-  attachDiplomaToMe(@Param('id') diplomaId: string, @CurrentUser() user: AuthUser) {
+  attachDiplomaToMe(
+    @Param('id', ParseIntPipe) diplomaId: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.users.attachDiplomaToStudent(diplomaId, user.id);
   }
 }

@@ -1,11 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsUUID } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsEnum, IsInt, Min } from 'class-validator';
 import { Role } from '@prisma/client';
 
 export class UpdateRoleDto {
-  @ApiProperty({ example: 'b2c3d4e5-f6a7-8901-bcde-f12345678901' })
-  @IsUUID()
-  userId: string;
+  @ApiProperty({ example: 2 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  userId: number;
 
   @ApiProperty({ example: Role.HR, enum: Role })
   @IsEnum(Role)
@@ -15,10 +18,10 @@ export class UpdateRoleDto {
 /** Снимок пользователя в ответе PATCH /users/role (без пароля и токенов). */
 export class UserRoleSnapshotDto {
   @ApiProperty({
-    example: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
+    example: 2,
     description: 'Идентификатор пользователя',
   })
-  id: string;
+  id: number;
 
   @ApiProperty({ example: 'user@example.com', description: 'Email' })
   email: string;

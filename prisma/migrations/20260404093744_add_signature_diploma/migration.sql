@@ -1,2 +1,2 @@
 -- AlterTable
-ALTER TABLE "diploma_tokens" ADD COLUMN     "signature" TEXT;
+ALTER TABLE IF EXISTS "diploma_tokens" ADD COLUMN IF NOT EXISTS "signature" TEXT;

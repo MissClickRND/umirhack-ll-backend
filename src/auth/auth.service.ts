@@ -150,7 +150,7 @@ export class AuthService {
     const ok = await bcrypt.compare(dto.password, user.passwordHash);
     if (!ok) throw new BadRequestException('Неверный пароль');
 
-    const safeUser = { id: user.id, email: user.email };
+    const safeUser = { id: user.id, email: user.email, role: user.role };
     const tokens = await this.issueTokens(
       user.id,
       user.email,
@@ -162,7 +162,7 @@ export class AuthService {
     return { user: safeUser, ...tokens };
   }
 
-  async logout(userId: string) {
+  async logout(userId: number) {
     await this.prisma.user.update({
       where: { id: userId },
       data: { hashedRefreshToken: null, tokenVersion: { increment: 1 } },
@@ -171,7 +171,7 @@ export class AuthService {
     return { ok: true };
   }
 
-  async refreshTokens(userId: string, refreshTokenFromCookie: string) {
+  async refreshTokens(userId: number, refreshTokenFromCookie: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -207,7 +207,7 @@ export class AuthService {
     };
   }
 
-  private async setRefreshTokenHash(userId: string, refreshToken: string) {
+  private async setRefreshTokenHash(userId: number, refreshToken: string) {
     const hash = await bcrypt.hash(refreshToken, 10);
     await this.prisma.user.update({
       where: { id: userId },
@@ -216,7 +216,7 @@ export class AuthService {
   }
 
   private async issueTokens(
-    userId: string,
+    userId: number,
     email: string,
     role: Role,
     tokenVersion: number,

@@ -5,7 +5,7 @@
 
 */
 -- AlterTable
-ALTER TABLE "diploma_tokens" DROP COLUMN "signature";
+ALTER TABLE IF EXISTS "diploma_tokens" DROP COLUMN IF EXISTS "signature";
 
 -- AlterTable
-ALTER TABLE "diplomas" ADD COLUMN     "signature" TEXT;
+ALTER TABLE IF EXISTS "diplomas" ADD COLUMN IF NOT EXISTS "signature" TEXT;

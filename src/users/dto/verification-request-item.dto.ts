@@ -4,12 +4,12 @@ import { Role } from '@prisma/client';
 /** Краткие данные вуза в заявке на верификацию. */
 export class VerificationUniversitySnippetDto {
   @ApiProperty({
-    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    example: 10,
     nullable: true,
     description:
-      'Идентификатор вуза (UUID) после создания записи; null, пока заявка только в черновике (pending)',
+      'Идентификатор вуза после создания записи; null, пока заявка только в черновике (pending)',
   })
-  id: string | null;
+  id: number | null;
 
   @ApiProperty({
     example: 'Московский государственный университет',
@@ -28,10 +28,10 @@ export class VerificationUniversitySnippetDto {
 /** Элемент списка заявок GET /verify (пользователи со статусом NEED_VERIFICATION). */
 export class VerificationRequestItemDto {
   @ApiProperty({
-    example: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
+    example: 3,
     description: 'Идентификатор пользователя',
   })
-  id: string;
+  id: number;
 
   @ApiProperty({ example: 'applicant@example.com', description: 'Email' })
   email: string;

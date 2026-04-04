@@ -16,13 +16,21 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: Joi.object({
+        NODE_ENV: Joi.string()
+          .valid('development', 'test', 'production')
+          .default('development'),
         PORT: Joi.number().port().default(3000),
         DATABASE_URL: Joi.string().required(),
-        DIPLOMA_SYMMETRIC_KEY: Joi.string()
-          .hex()
-          .length(64)
-          .required()
-          .description('256-bit AES key as 64 hex chars; encrypts diploma PII'),
+        DIPLOMA_SYMMETRIC_KEY: Joi.when('NODE_ENV', {
+          is: 'production',
+          then: Joi.string().hex().length(64).required(),
+          otherwise: Joi.string()
+            .hex()
+            .length(64)
+            .default(
+              'a1b2c3d4e5f6789012345678abcdef0123456789abcdef0123456789abcdef00',
+            ),
+        }).description('256-bit AES key as 64 hex chars; encrypts diploma PII'),
       }),
     }),
     ThrottlerModule.forRoot([

@@ -43,7 +43,7 @@ export class UsersService {
     });
   }
 
-  async updateRole(params: { userId: string; role: Role }) {
+  async updateRole(params: { userId: number; role: Role }) {
     const { userId, role } = params;
 
     const user = await this.prisma.user.findUnique({
@@ -94,7 +94,7 @@ export class UsersService {
         ...rest
       }) => {
         let university:
-          | { id: string; name: string; shortName: string | null }
+          | { id: number; name: string; shortName: string | null }
           | { id: null; name: string; shortName: string | null }
           | null = organization;
         if (!university) {
@@ -109,7 +109,7 @@ export class UsersService {
     );
   }
 
-  private async ensureUniversityCryptoFields(universityId: string) {
+  private async ensureUniversityCryptoFields(universityId: number) {
     const u = await this.prisma.university.findUnique({
       where: { id: universityId },
     });
@@ -137,7 +137,7 @@ export class UsersService {
   }
 
   async reviewVerificationRequest(params: {
-    userId: string;
+    userId: number;
     action: 'approve' | 'reject';
   }) {
     const { userId, action } = params;
@@ -208,9 +208,7 @@ export class UsersService {
       where: { name },
     });
     if (existing) {
-      throw new ConflictException(
-        'Вуз с таким названием уже зарегистрирован',
-      );
+      throw new ConflictException('Вуз с таким названием уже зарегистрирован');
     }
 
     const master = this.getDiplomaSymmetricKey();
@@ -264,7 +262,7 @@ export class UsersService {
     }
   }
 
-  async attachDiplomaToStudent(diplomaId: string, userId: string) {
+  async attachDiplomaToStudent(diplomaId: number, userId: number) {
     const student = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, role: true },

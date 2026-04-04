@@ -4,10 +4,10 @@ import { Role } from '@prisma/client';
 /** Элемент списка пользователей для GET /users (без чувствительных полей). */
 export class UserListItemDto {
   @ApiProperty({
-    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    example: 1,
     description: 'Идентификатор пользователя',
   })
-  id: string;
+  id: number;
 
   @ApiProperty({ example: 'user@example.com', description: 'Email' })
   email: string;
