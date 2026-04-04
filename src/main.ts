@@ -7,11 +7,10 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AllExceptionFilter } from './common/filters/all-exeption.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import { createConditionalCors } from './common/middleware/conditional-cors.middleware';
 
-function parseCorsOrigins(raw?: string): string[] | true {
+function parseCorsWhitelist(raw?: string): string[] {
   const value = (raw ?? 'http://localhost:5173,http://localhost:3000').trim();
-  if (value === '*') return true;
-
   const origins = value
     .split(',')
     .map((v) => v.trim())
@@ -34,6 +33,16 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionFilter());
 
   app.use(cookieParser());
+  app.use(
+    createConditionalCors({
+      whitelist: parseCorsWhitelist(
+        process.env.CORS_ORIGINS ?? process.env.CORS_ORIGIN,
+      ),
+      allowCredentialsForWhitelist: parseCorsCredentials(
+        process.env.CORS_CREDENTIALS,
+      ),
+    }),
+  );
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -67,16 +76,6 @@ async function bootstrap() {
         return req;
       },
     },
-  });
-
-  const corsOrigins = parseCorsOrigins(
-    process.env.CORS_ORIGINS ?? process.env.CORS_ORIGIN,
-  );
-  const corsCredentials = parseCorsCredentials(process.env.CORS_CREDENTIALS);
-
-  app.enableCors({
-    credentials: corsCredentials,
-    origin: corsOrigins,
   });
 
   await app.listen(process.env.PORT ?? 3000);
