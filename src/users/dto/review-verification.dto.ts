@@ -15,8 +15,11 @@ export class ReviewVerificationDto {
 
 /** Снимок пользователя в ответе PATCH /verify/:id (без пароля и токенов). */
 export class VerificationUserSnapshotDto {
-  @ApiProperty({ example: 5, description: 'Идентификатор пользователя' })
-  id: number;
+  @ApiProperty({
+    example: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
+    description: 'Идентификатор пользователя',
+  })
+  id: string;
 
   @ApiProperty({ example: 'rep@university.ru', description: 'Email' })
   email: string;

@@ -7,6 +7,7 @@ import { JwtAccessGuard } from './auth/guards/jwt-access.guard';
 import { RolesGuard } from './auth/guards/roles.guards';
 import { UsersModule } from './users/users.module';
 import { DiplomasModule } from './diplomas/diplomas.module';
+import { PublicApiServiseModule } from './public-api-servise/public-api-servise.module';
 
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
@@ -17,6 +18,11 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
       validationSchema: Joi.object({
         PORT: Joi.number().port().default(3000),
         DATABASE_URL: Joi.string().required(),
+        DIPLOMA_SYMMETRIC_KEY: Joi.string()
+          .hex()
+          .length(64)
+          .required()
+          .description('256-bit AES key as 64 hex chars; encrypts diploma PII'),
       }),
     }),
     ThrottlerModule.forRoot([
@@ -29,6 +35,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
     AuthModule,
     UsersModule,
     DiplomasModule,
+    PublicApiServiseModule,
   ],
   providers: [
     {

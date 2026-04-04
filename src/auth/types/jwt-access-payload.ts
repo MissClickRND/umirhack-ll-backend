@@ -1,4 +1,4 @@
 export type JwtAccessPayload = {
-  userId: number;
+  userId: string;
   email: string;
 };

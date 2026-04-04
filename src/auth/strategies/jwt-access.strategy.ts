@@ -7,7 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthUser, Role } from '../types/auth-user.type';
 
 type JwtAccessPayload = {
-  sub: number;
+  sub: string;
   email: string;
   role: Role;
   tokenVersion: number;

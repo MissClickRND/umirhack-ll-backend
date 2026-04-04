@@ -15,14 +15,18 @@ enum Role {
 }
 
 model User {
-  id                 Int         @id @default(autoincrement())
+  id                 String      @id @default(uuid()) @db.Uuid
   email              String      @unique
   passwordHash       String
   hashedRefreshToken String?
   tokenVersion       Int         @default(0)
   role               Role        @default(HR)
-  universityId       String?
-  university         University? @relation(fields: [universityId], references: [id], onDelete: SetNull)
+  organizationId String?     @map("organization_id") @db.Uuid
+  organization   University? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  pendingUniversityName      String? @map("pending_university_name")
+  pendingUniversityShortName String? @map("pending_university_short_name")
+
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
   diplomas           Diploma[]
@@ -35,10 +39,10 @@ model Diploma {
   registrationNumberEncrypted String @map("registration_number")
   registrationNumberHash      String @unique @map("registration_number_hash")
 
-  userId Int?  @map("user_id")
-  user   User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId String? @map("user_id") @db.Uuid
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  universityId String     @map("university_id")
+  universityId String     @map("university_id") @db.Uuid
   university   University @relation(fields: [universityId], references: [id], onDelete: Restrict)
 
   issuedAt DateTime @map("issued_at")
@@ -48,7 +52,7 @@ model Diploma {
 
   status DiplomaStatus
 
-  signature String?
+  signature String @default("") @map("signature")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -78,9 +82,9 @@ model DiplomaToken {
 }
 
 model University {
-  id String @id @default(uuid())
+  id String @id @default(uuid()) @db.Uuid
 
-  name      String
+  name      String  @unique
   shortName String? @map("short_name")
 
   publicKey             String? @map("public_key")
@@ -97,7 +101,8 @@ model University {
 }
 
 enum DiplomaStatus {
-  ACTIVE
+  ISSUED
+  VALID
   REVOKED
 }
 

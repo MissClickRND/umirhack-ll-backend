@@ -1,4 +1,11 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+} from '@nestjs/common';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import type { AuthUser } from 'src/auth/types/auth-user.type';
@@ -37,13 +44,13 @@ export class UsersController {
     isArray: true,
     example: [
       {
-        id: 1,
+        id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
         email: 'admin@example.com',
         role: 'ADMIN',
         createdAt: '2025-01-10T08:00:00.000Z',
       },
       {
-        id: 2,
+        id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
         email: 'student@example.com',
         role: 'STUDENT',
         createdAt: '2025-01-12T14:20:00.000Z',
@@ -64,7 +71,7 @@ export class UsersController {
     isArray: true,
     example: [
       {
-        id: 5,
+        id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
         email: 'rep@university.ru',
         role: 'NEED_VERIFICATION',
         createdAt: '2025-01-10T08:00:00.000Z',
@@ -75,11 +82,15 @@ export class UsersController {
         },
       },
       {
-        id: 6,
+        id: 'd4e5f6a7-b8c9-0123-def0-234567890123',
         email: 'newuser@example.com',
         role: 'NEED_VERIFICATION',
         createdAt: '2025-01-12T14:20:00.000Z',
-        university: null,
+        university: {
+          id: null,
+          name: 'Санкт-Петербургский политехнический университет',
+          shortName: 'СПбПУ',
+        },
       },
     ],
   })
@@ -92,16 +103,16 @@ export class UsersController {
   @ApiOperation({ summary: 'Одобрение/отклонение заявки (Админ)' })
   @ApiOkResponse({
     description:
-      'Результат проверки заявки: объекты before и after с полями id, email, role. Пароли и токены не возвращаются. При успешном approve роль меняется на UNIVERSITY и сбрасывается refresh-токен на сервере.',
+      'Результат проверки заявки: объекты before и after с полями id, email, role. Пароли и токены не возвращаются. При успешном approve создаётся запись вуза (если её ещё не было), генерируются ключи, роль меняется на UNIVERSITY, сбрасывается refresh-токен. При дубликате полного названия вуза — 409 Conflict. При reject очищаются временные поля названия заявки.',
     type: ReviewVerificationResponseDto,
     example: {
       before: {
-        id: 5,
+        id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
         email: 'rep@university.ru',
         role: 'NEED_VERIFICATION',
       },
       after: {
-        id: 5,
+        id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
         email: 'rep@university.ru',
         role: 'UNIVERSITY',
       },
@@ -110,7 +121,7 @@ export class UsersController {
   @Roles('ADMIN')
   @Patch('verify/:id')
   reviewVerificationRequest(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ReviewVerificationDto,
   ) {
     return this.users.reviewVerificationRequest({
@@ -127,12 +138,12 @@ export class UsersController {
     type: UpdateRoleResponseDto,
     example: {
       before: {
-        id: 2,
+        id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
         email: 'user@example.com',
         role: 'STUDENT',
       },
       after: {
-        id: 2,
+        id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
         email: 'user@example.com',
         role: 'HR',
       },
@@ -151,9 +162,9 @@ export class UsersController {
     type: AttachDiplomaResponseDto,
     example: {
       id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-      userId: 42,
+      userId: 'e5f6a7b8-c9d0-1234-ef01-345678901234',
       universityId: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
-      status: 'ACTIVE',
+      status: 'ISSUED',
     },
   })
   @Roles('STUDENT')

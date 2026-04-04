@@ -1,15 +1,36 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CryptoService } from '../crypto/crypto.service';
 import type { Role } from 'src/auth/types/auth-user.type';
 import { Role as PrismaRole } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly crypto: CryptoService,
+    private readonly config: ConfigService,
+  ) {}
+
+  private getDiplomaSymmetricKey(): string {
+    const key = this.config.get<string>('DIPLOMA_SYMMETRIC_KEY', {
+      infer: true,
+    });
+    if (!key || !/^[0-9a-fA-F]{64}$/.test(key)) {
+      throw new InternalServerErrorException(
+        'DIPLOMA_SYMMETRIC_KEY must be 64 hex characters (256-bit)',
+      );
+    }
+    return key;
+  }
 
   getAll() {
     return this.prisma.user.findMany({
@@ -22,7 +43,7 @@ export class UsersService {
     });
   }
 
-  async updateRole(params: { userId: number; role: Role }) {
+  async updateRole(params: { userId: string; role: Role }) {
     const { userId, role } = params;
 
     const user = await this.prisma.user.findUnique({
@@ -36,7 +57,7 @@ export class UsersService {
       where: { id: userId },
       data: {
         role,
-        hashedRefreshToken: null, // ключевое: выкидываем со всех устройств
+        hashedRefreshToken: null,
         tokenVersion: { increment: 1 },
       },
       select: { id: true, email: true, role: true },
@@ -45,15 +66,17 @@ export class UsersService {
     return { before: user, after: updated };
   }
 
-  getVerificationRequests() {
-    return this.prisma.user.findMany({
+  async getVerificationRequests() {
+    const rows = await this.prisma.user.findMany({
       where: { role: PrismaRole.NEED_VERIFICATION },
       select: {
         id: true,
         email: true,
         role: true,
         createdAt: true,
-        university: {
+        pendingUniversityName: true,
+        pendingUniversityShortName: true,
+        organization: {
           select: {
             id: true,
             name: true,
@@ -63,17 +86,72 @@ export class UsersService {
       },
       orderBy: { createdAt: 'asc' },
     });
+    return rows.map(
+      ({
+        organization,
+        pendingUniversityName,
+        pendingUniversityShortName,
+        ...rest
+      }) => {
+        let university:
+          | { id: string; name: string; shortName: string | null }
+          | { id: null; name: string; shortName: string | null }
+          | null = organization;
+        if (!university) {
+          const pn = pendingUniversityName?.trim();
+          const ps = pendingUniversityShortName?.trim();
+          if (pn && ps) {
+            university = { id: null, name: pn, shortName: ps };
+          }
+        }
+        return { ...rest, university };
+      },
+    );
+  }
+
+  private async ensureUniversityCryptoFields(universityId: string) {
+    const u = await this.prisma.university.findUnique({
+      where: { id: universityId },
+    });
+    if (!u) return;
+
+    const master = this.getDiplomaSymmetricKey();
+    const data: Prisma.UniversityUpdateInput = {};
+
+    if (!u.publicKey?.trim() || !u.encryptedPrivateKey?.trim()) {
+      const { publicKey, privateKey } = this.crypto.generateKeyPair();
+      data.publicKey = publicKey;
+      data.encryptedPrivateKey = privateKey;
+    }
+    if (!u.encryptedSymmetricKey?.trim()) {
+      const symm = this.crypto.generateSymmetricKey();
+      data.encryptedSymmetricKey = this.crypto.encryptSymmetric(symm, master);
+    }
+
+    if (Object.keys(data).length > 0) {
+      await this.prisma.university.update({
+        where: { id: universityId },
+        data,
+      });
+    }
   }
 
   async reviewVerificationRequest(params: {
-    userId: number;
+    userId: string;
     action: 'approve' | 'reject';
   }) {
     const { userId, action } = params;
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, role: true },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        organizationId: true,
+        pendingUniversityName: true,
+        pendingUniversityShortName: true,
+      },
     });
 
     if (!user) throw new BadRequestException('User not found');
@@ -84,29 +162,109 @@ export class UsersService {
       throw new BadRequestException('User does not require verification');
     }
 
-    const nextRole =
-      action === 'approve'
-        ? PrismaRole.UNIVERSITY
-        : PrismaRole.NEED_VERIFICATION;
+    const before = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    };
 
-    if (user.role === nextRole) {
-      return { before: user, after: user };
+    if (action === 'reject') {
+      const after = await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          pendingUniversityName: null,
+          pendingUniversityShortName: null,
+        },
+        select: { id: true, email: true, role: true },
+      });
+      return { before, after };
     }
 
-    const updated = await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        role: nextRole,
-        hashedRefreshToken: null,
-        tokenVersion: { increment: 1 },
-      },
-      select: { id: true, email: true, role: true },
-    });
+    if (user.organizationId) {
+      await this.ensureUniversityCryptoFields(user.organizationId);
+      const after = await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          role: PrismaRole.UNIVERSITY,
+          hashedRefreshToken: null,
+          tokenVersion: { increment: 1 },
+          pendingUniversityName: null,
+          pendingUniversityShortName: null,
+        },
+        select: { id: true, email: true, role: true },
+      });
+      return { before, after };
+    }
 
-    return { before: user, after: updated };
+    const name = user.pendingUniversityName?.trim();
+    const shortName = user.pendingUniversityShortName?.trim();
+    if (!name || !shortName) {
+      throw new BadRequestException(
+        'Заявка не содержит названия вуза; пользователь должен указать name и short_name при регистрации',
+      );
+    }
+
+    const existing = await this.prisma.university.findUnique({
+      where: { name },
+    });
+    if (existing) {
+      throw new ConflictException(
+        'Вуз с таким названием уже зарегистрирован',
+      );
+    }
+
+    const master = this.getDiplomaSymmetricKey();
+    const { publicKey, privateKey } = this.crypto.generateKeyPair();
+    const symm = this.crypto.generateSymmetricKey();
+    const encryptedSymmetricKey = this.crypto.encryptSymmetric(symm, master);
+
+    try {
+      const after = await this.prisma.$transaction(async (tx) => {
+        const university = await tx.university.create({
+          data: {
+            name,
+            shortName,
+          },
+          select: { id: true },
+        });
+
+        await tx.university.update({
+          where: { id: university.id },
+          data: {
+            publicKey,
+            encryptedPrivateKey: privateKey,
+            encryptedSymmetricKey,
+          },
+        });
+
+        return tx.user.update({
+          where: { id: userId },
+          data: {
+            organizationId: university.id,
+            role: PrismaRole.UNIVERSITY,
+            hashedRefreshToken: null,
+            tokenVersion: { increment: 1 },
+            pendingUniversityName: null,
+            pendingUniversityShortName: null,
+          },
+          select: { id: true, email: true, role: true },
+        });
+      });
+      return { before, after };
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'Вуз с таким названием уже зарегистрирован',
+        );
+      }
+      throw e;
+    }
   }
 
-  async attachDiplomaToStudent(diplomaId: string, userId: number) {
+  async attachDiplomaToStudent(diplomaId: string, userId: string) {
     const student = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, role: true },
