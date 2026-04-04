@@ -6,38 +6,30 @@ import type { Request } from 'express';
 import { AuthUserWithRefresh } from '../types/auth-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
 
-
-function cookieExtractorRefresh(
-  req: Request,
-  cookieName: string,
-): string | null {
-  return (
-    req?.cookies?.[cookieName] ??
-    req?.cookies?.refreshToken ??
-    req?.cookies?.refresh_token ??
-    null
-  );
-}
-
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(
   Strategy,
   'jwt-refresh',
 ) {
+  private readonly refreshCookieName: string;
+
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
   ) {
     const refreshCookieName =
-      config.get<string>('REFRESH_COOKIE_NAME') ?? 'refreshToken';
+      config.get<string>('REFRESH_COOKIE_NAME')?.trim() || 'refreshToken';
 
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
-        (req: Request) => cookieExtractorRefresh(req, refreshCookieName),
+        (req: Request) =>
+          (req?.cookies?.[refreshCookieName] as string | undefined) ?? null,
       ]),
       secretOrKey: config.get<string>('JWT_REFRESH_SECRET')!,
-      passReqToCallback: true, // чтобы в validate пришёл req
+      passReqToCallback: true,
     });
+
+    this.refreshCookieName = refreshCookieName;
   }
 
   async validate(
@@ -51,12 +43,10 @@ export class JwtRefreshStrategy extends PassportStrategy(
 
     if (!user) throw new UnauthorizedException('User not found');
 
-    const refreshCookieName =
-      this.config.get<string>('REFRESH_COOKIE_NAME') ?? 'refreshToken';
-    const refreshToken =
-      req.cookies?.[refreshCookieName] ??
-      req.cookies?.refreshToken ??
-      req.cookies?.refresh_token;
+    const refreshToken = req.cookies?.[this.refreshCookieName];
+    if (typeof refreshToken !== 'string') {
+      throw new UnauthorizedException('No refresh cookie');
+    }
 
     return {
       id: payload.sub,

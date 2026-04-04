@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
   IsEnum,
@@ -17,14 +17,22 @@ export class RegisterDto {
   @IsEnum(RegisterAccountType)
   accountType: RegisterAccountType;
 
-  @ApiProperty({ example: 'user@example.com' })
+  @ApiPropertyOptional({
+    example: 'user@example.com',
+    description: 'Обязателен при accountType=student',
+  })
+  @ValidateIf((o: RegisterDto) => o.accountType === RegisterAccountType.STUDENT)
   @IsEmail()
-  email: string;
+  email?: string;
 
-  @ApiProperty({ example: 'SupePassword123' })
+  @ApiPropertyOptional({
+    example: 'SuperPassword123',
+    description: 'Обязателен при accountType=student',
+  })
+  @ValidateIf((o: RegisterDto) => o.accountType === RegisterAccountType.STUDENT)
   @IsString()
   @MinLength(4)
-  password: string;
+  password?: string;
 
   @ApiProperty({ example: 'University of Example' })
   @ValidateIf((o: RegisterDto) => o.accountType === RegisterAccountType.UNIVERSITY)

@@ -1,4 +1,6 @@
-﻿import { NestFactory } from '@nestjs/core';
+﻿import 'dotenv/config';
+import { NestFactory } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -24,6 +26,9 @@ function parseCorsCredentials(raw?: string): boolean {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
+  const accessCookieName =
+    configService.get<string>('ACCESS_COOKIE_NAME')?.trim() || 'accessToken';
 
   app.useGlobalInterceptors(new LoggingInterceptor());
   app.useGlobalFilters(new AllExceptionFilter());
@@ -41,11 +46,19 @@ async function bootstrap() {
     .setTitle('API')
     .setDescription('CRM API')
     .setVersion('1.0')
-    .addCookieAuth('accessToken')
+    .addCookieAuth(accessCookieName)
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document);
+  SwaggerModule.setup('docs', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+      requestInterceptor: (req: { credentials?: RequestCredentials }) => {
+        req.credentials = 'include';
+        return req;
+      },
+    },
+  });
 
   const corsOrigins = parseCorsOrigins(
     process.env.CORS_ORIGINS ?? process.env.CORS_ORIGIN,
