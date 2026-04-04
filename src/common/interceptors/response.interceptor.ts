@@ -15,27 +15,27 @@ function isPaginatedShape(x: any): x is PaginatedShape {
 
 @Injectable()
 export class ResponseInterceptor implements NestInterceptor {
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
-    const now = Date.now();
+    intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+        const now = Date.now();
 
-    return next.handle().pipe(
-      map((result) => {
-        const timestamp = Date.now();
+        return next.handle().pipe(
+            map((result) => {
+                const timestamp = Date.now();
 
-        // Если сервис вернул { data, meta } — разворачиваем
-        if (isPaginatedShape(result)) {
-          return {
-            success: true,
-            timestamp,
-            data: result.data,
-            meta: result.meta,
-          };
-        }
+                // Если сервис вернул { data, meta } — разворачиваем
+                if (isPaginatedShape(result)) {
+                    return {
+                        success: true,
+                        timestamp,
+                        data: result.data,
+                        meta: result.meta,
+                    };
+                }
 
-        return {      
-          data: result,
-        };
-      }),
-    );
-  }
+                return {      
+                    data: result,
+                };
+            }),
+        );
+    }
 }

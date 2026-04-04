@@ -8,36 +8,36 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.useGlobalInterceptors(
-    new LoggingInterceptor(),
-  );
-  app.useGlobalFilters(new AllExceptionFilter());
+    const app = await NestFactory.create(AppModule);
+    app.useGlobalInterceptors(
+        new LoggingInterceptor(),
+    );
+    app.useGlobalFilters(new AllExceptionFilter());
 
-  app.use(cookieParser());
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true, 
-      forbidNonWhitelisted: true, 
-      transform: true, 
-    }),
-  );
+    app.use(cookieParser());
+    app.useGlobalPipes(
+        new ValidationPipe({
+            whitelist: true, 
+            forbidNonWhitelisted: true, 
+            transform: true, 
+        }),
+    );
 
-  const config = new DocumentBuilder()
-    .setTitle('API')
-    .setDescription('CRM API')
-    .setVersion('1.0')
-    .addCookieAuth('accessToken')
-    .build();
+    const config = new DocumentBuilder()
+        .setTitle('API')
+        .setDescription('CRM API')
+        .setVersion('1.0')
+        .addCookieAuth('accessToken')
+        .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document);
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('docs', app, document);
 
-  app.enableCors({
-    credentials: true,
-    origin: 'http://localhost:5173,https://miss-click.ru',
-  });
+    app.enableCors({
+        credentials: true,
+        origin: 'http://localhost:5173,https://miss-click.ru',
+    });
 
-  await app.listen(process.env.PORT ?? 3000);
+    await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

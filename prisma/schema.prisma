@@ -15,12 +15,92 @@ enum Role {
 }
 
 model User {
-  id                 Int      @id @default(autoincrement())
-  email              String   @unique
+  id                 Int       @id @default(autoincrement())
+  email              String    @unique
   passwordHash       String
   hashedRefreshToken String? // может быть null (если не залогинен)
-  tokenVersion       Int      @default(0)
-  role               Role     @default(HR)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  tokenVersion       Int       @default(0)
+  role               Role      @default(HR)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  diplomas           Diploma[]
+}
+
+model Diploma {
+  id String @id @default(uuid())
+
+  fullNameAuthorEncrypted     String @map("full_name_author")
+  registrationNumberEncrypted String @map("registration_number")
+  registrationNumberHash      String @unique @map("registration_number_hash")
+
+  userId Int  @map("user_id")
+  user   User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  universityId String     @map("university_id")
+  university   University @relation(fields: [universityId], references: [id], onDelete: Restrict)
+
+  issuedAt DateTime @map("issued_at")
+
+  specialty   String
+  degreeLevel DegreeLevel @map("degree_level")
+
+  status DiplomaStatus
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tokens DiplomaToken[]
+
+  @@map("diplomas")
+}
+
+model DiplomaToken {
+  id String @id @default(uuid())
+
+  diplomaId String @map("diploma_id")
+  tokenHash String @unique @map("token_hash")
+
+  expiresAt DateTime? @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  isOneTime  Boolean   @default(false) @map("is_one_time")
+  lastUsedAt DateTime? @map("last_used_at")
+
+  createdBy String @map("created_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  diploma Diploma @relation(fields: [diplomaId], references: [id])
+
+  @@map("diploma_tokens")
+}
+
+model University {
+  id String @id @default(uuid())
+
+  name      String
+  shortName String? @map("short_name")
+
+  publicKey             String? @map("public_key")
+  encryptedPrivateKey   String? @map("encrypted_private_key")
+  encryptedSymmetricKey String? @map("encrypted_symmetric_key")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  diplomas Diploma[]
+
+  @@map("universities")
+}
+
+enum DiplomaStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum DegreeLevel {
+  BACHELOR
+  MAGISTRACY
+  SPECIALIST
+  DOCTORATE
 }
