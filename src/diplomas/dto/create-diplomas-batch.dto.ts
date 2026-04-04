@@ -11,14 +11,13 @@ export class CreateDiplomaBatchDto {
                 fullNameAuthor: 'Ivan Ivanov',
                 registrationNumber: '1234567890123',
                 universityId: 12,
-                userId: 1,
                 issuedAt: '2025-06-01',
                 specialty: 'Computer Science',
                 degreeLevel: 'BACHELOR',
             },
         ],
     })
-    
+
     @ValidateNested({ each: true })
     @Type(() => CreateDiplomaDto)
     @ArrayMinSize(1)
