@@ -6,11 +6,14 @@
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Role } from '@prisma/client';
+import { randomBytes, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterAccountType, RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import type { StringValue } from 'ms';
+
+const SIMPLE_EMAIL_RE = /^\S+@\S+\.\S+$/;
 
 @Injectable()
 export class AuthService {
@@ -37,7 +40,35 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto) {
-    const email = dto.email.toLowerCase().trim();
+    const isStudent = dto.accountType === RegisterAccountType.STUDENT;
+
+    let email: string;
+    let passwordPlain: string;
+
+    if (isStudent) {
+      email = dto.email!.toLowerCase().trim();
+      passwordPlain = dto.password!;
+    } else {
+      const emailTrim = dto.email?.trim() ?? '';
+      const pass = dto.password ?? '';
+      const hasBoth = emailTrim.length > 0 && pass.length >= 4;
+      const hasNeither = emailTrim.length === 0 && pass.length === 0;
+
+      if (hasBoth) {
+        if (!SIMPLE_EMAIL_RE.test(emailTrim)) {
+          throw new BadRequestException('Invalid email');
+        }
+        email = emailTrim.toLowerCase();
+        passwordPlain = pass;
+      } else if (hasNeither) {
+        email = `university-${randomUUID()}@internal.local`;
+        passwordPlain = randomBytes(32).toString('hex');
+      } else {
+        throw new BadRequestException(
+          'University registration: provide both email and password (min 4 characters), or omit both',
+        );
+      }
+    }
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
@@ -46,7 +77,7 @@ export class AuthService {
       throw new BadRequestException('User already exists');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await bcrypt.hash(passwordPlain, 10);
 
     const user =
       dto.accountType === RegisterAccountType.STUDENT
