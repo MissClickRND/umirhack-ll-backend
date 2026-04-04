@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { DiplomaStatus } from '@prisma/client';
 
 export class BulkVerifyDiplomaSuccessDto {
@@ -25,6 +25,15 @@ export class BulkVerifyDiplomaShortDto {
   @ApiProperty({ example: 'ABC-123' })
   diplomaNumber!: string;
 
-  @ApiProperty({ enum: DiplomaStatus, example: DiplomaStatus.VALID })
-  status!: DiplomaStatus;
+  @ApiProperty({ example: false })
+  valid!: false;
+
+  @ApiPropertyOptional({ enum: DiplomaStatus, example: DiplomaStatus.REVOKED })
+  status?: DiplomaStatus;
+
+  @ApiPropertyOptional({
+    enum: ['NOT_FOUND', 'INVALID_OR_REVOKED'],
+    example: 'NOT_FOUND',
+  })
+  reason?: 'NOT_FOUND' | 'INVALID_OR_REVOKED';
 }

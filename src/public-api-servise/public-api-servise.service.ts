@@ -83,14 +83,17 @@ export class PublicApiServiseService {
       if (!diploma) {
         results.push({
           diplomaNumber,
-          status: DiplomaStatus.VALID,
+          valid: false,
+          reason: 'NOT_FOUND',
         });
         continue;
       }
 
       const short = (): BulkVerifyDiplomaShortDto => ({
         diplomaNumber,
+        valid: false,
         status: diploma.status,
+        reason: 'INVALID_OR_REVOKED',
       });
 
       if (!diploma.signature?.trim()) {

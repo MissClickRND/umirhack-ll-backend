@@ -75,8 +75,11 @@ export class DiplomasController {
   @Get('user/:userId')
   @ApiOperation({ summary: 'Получить дипломы пользователя' })
   @ApiParam({ name: 'userId', description: 'ID пользователя' })
-  getByUser(@Param('userId', ParseIntPipe) userId: number) {
-    return this.diplomasService.findByUser(userId);
+  getByUser(
+    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.diplomasService.findByUser(userId, user.id);
   }
 
   // 4. UPDATE DIPLOMA STATUS
@@ -88,8 +91,9 @@ export class DiplomasController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateDiplomaStatusDto,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.diplomasService.update(id, dto);
+    return this.diplomasService.update(id, dto, user.id, user.role);
   }
 
   // 5. CREATE QR TOKEN
@@ -113,8 +117,11 @@ export class DiplomasController {
   @Delete('qr-token/:tokenId')
   @ApiOperation({ summary: 'Отозвать QR-токен по ID' })
   @ApiParam({ name: 'tokenId', description: 'ID QR-токена' })
-  revokeQrToken(@Param('tokenId', ParseIntPipe) tokenId: number) {
-    return this.diplomasService.revokeQrTokenById(tokenId);
+  revokeQrToken(
+    @Param('tokenId', ParseIntPipe) tokenId: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.diplomasService.revokeQrTokenById(tokenId, user.id);
   }
 
   // 7. GET BY QR TOKEN
@@ -153,7 +160,10 @@ export class DiplomasController {
   @Roles('STUDENT')
   @Get(':userId/list')
   @ApiOperation({ summary: 'Получить токены пользователя' })
-  getUserTokens(@Param('userId', ParseIntPipe) userId: number) {
-    return this.diplomasService.getUserTokens(userId);
+  getUserTokens(
+    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.diplomasService.getUserTokens(userId, user.id);
   }
 }

@@ -14,6 +14,7 @@ import * as crypto from 'crypto';
 import { buildDiplomaSigningPayload } from './diploma-signing.js';
 import { DiplomaCryptoResolverService } from './diploma-crypto-resolver.service';
 import { DiplomaHumanMapper } from './diploma-human.mapper';
+import type { Role } from 'src/auth/types/auth-user.type';
 
 @Injectable()
 export class DiplomasService {
@@ -212,9 +213,13 @@ export class DiplomasService {
     };
   }
 
-  async findByUser(userId: number) {
+  async findByUser(userId: number, requesterUserId: number) {
     if (!Number.isInteger(userId) || userId <= 0) {
       throw new BadRequestException('Invalid userId');
+    }
+
+    if (requesterUserId !== userId) {
+      throw new ForbiddenException('Forbidden');
     }
 
     const diplomas = await this.prisma.diploma.findMany({
@@ -245,13 +250,41 @@ export class DiplomasService {
     return this.mapper.toHumanDiploma(diploma);
   }
 
-  async update(id: number, dto: UpdateDiplomaStatusDto) {
+  async update(
+    id: number,
+    dto: UpdateDiplomaStatusDto,
+    requesterUserId: number,
+    requesterRole: Role,
+  ) {
     const diploma = await this.prisma.diploma.findUnique({
       where: { id },
+      select: {
+        id: true,
+        universityId: true,
+      },
     });
 
     if (!diploma) {
       throw new NotFoundException('Diploma not found');
+    }
+
+    if (requesterRole === 'UNIVERSITY') {
+      const requester = await this.prisma.user.findUnique({
+        where: { id: requesterUserId },
+        select: { role: true, organizationId: true },
+      });
+
+      if (
+        !requester ||
+        requester.role !== 'UNIVERSITY' ||
+        !requester.organizationId
+      ) {
+        throw new ForbiddenException('Forbidden');
+      }
+
+      if (requester.organizationId !== diploma.universityId) {
+        throw new ForbiddenException('University can update only own diplomas');
+      }
     }
 
     await this.prisma.diploma.update({
@@ -423,13 +456,24 @@ export class DiplomasService {
     return this.mapper.toHumanDiploma(diploma);
   }
 
-  async revokeQrTokenById(tokenId: number) {
+  async revokeQrTokenById(tokenId: number, requesterUserId: number) {
     const token = await this.prisma.diplomaToken.findUnique({
       where: { id: tokenId },
+      include: {
+        diploma: {
+          select: {
+            userId: true,
+          },
+        },
+      },
     });
 
     if (!token) {
       throw new NotFoundException('Token not found');
+    }
+
+    if (token.diploma.userId !== requesterUserId) {
+      throw new ForbiddenException('Forbidden');
     }
 
     if (token.revokedAt) {
@@ -486,9 +530,13 @@ export class DiplomasService {
     return this.mapper.toHumanDiploma(diploma);
   }
 
-  async getUserTokens(userId: number) {
+  async getUserTokens(userId: number, requesterUserId: number) {
     if (!Number.isInteger(userId) || userId <= 0) {
       throw new BadRequestException('Invalid userId');
+    }
+
+    if (requesterUserId !== userId) {
+      throw new ForbiddenException('Forbidden');
     }
 
     const diplomas = await this.prisma.diploma.findMany({
