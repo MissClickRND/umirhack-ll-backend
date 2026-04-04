@@ -32,15 +32,35 @@ export class UsersService {
     return key;
   }
 
-  getAll() {
-    return this.prisma.user.findMany({
+  async getAll(page?: number, limit?: number) {
+    const safePage = !page || page < 1 ? 1 : page;
+    const safeLimit = !limit || limit < 1 || limit > 50 ? 10 : limit;
+    const skip = (safePage - 1) * safeLimit;
+
+    const total = await this.prisma.user.count();
+
+    const data = await this.prisma.user.findMany({
       select: {
         id: true,
         email: true,
         role: true,
         createdAt: true,
       },
+      skip,
+      take: safeLimit,
+      orderBy: { createdAt: 'desc' },
     });
+
+    return {
+      data,
+      meta: {
+        page: safePage,
+        limit: safeLimit,
+        itemsOnPage: data.length,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / safeLimit)),
+      },
+    };
   }
 
   getAllUniversities() {

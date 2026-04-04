@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import {
   ApiBody,
@@ -25,10 +26,11 @@ import { Public } from 'src/auth/decorators/public.decorator';
 import { UpdateDiplomaStatusDto } from './dto/update-diploma-status.dto';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import type { AuthUser } from 'src/auth/types/auth-user.type';
+import type { Request } from 'express';
 
 @ApiTags('diplomas')
 @Controller('diplomas')
-@Throttle({ default: { limit: 8, ttl: 60_000 } })
+@Throttle({ default: { limit: 15, ttl: 60_000 } })
 export class DiplomasController {
   constructor(private readonly diplomasService: DiplomasService) {}
 
@@ -48,14 +50,23 @@ export class DiplomasController {
   // 2. GET BY UNIVERSITY
 
   @Roles('UNIVERSITY', 'ADMIN')
-  @Get('university/:universityId')
+  @Get('university')
   @ApiOperation({ summary: 'Получить дипломы по университету' })
-  @ApiParam({ name: 'universityId', description: 'ID университета' })
+  @ApiQuery({ name: 'universityId', required: true, example: 1 })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
   getByUniversity(
-    @Param('universityId', ParseIntPipe) universityId: number,
+    @Query('universityId', ParseIntPipe) universityId: number,
     @CurrentUser() user: AuthUser,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
   ) {
-    return this.diplomasService.findByUniversity(universityId, user.id);
+    return this.diplomasService.findByUniversity(
+      universityId,
+      user?.id,
+      page ? Number(page) : undefined,
+      limit ? Number(limit) : undefined,
+    );
   }
 
   // 3. GET BY USER
@@ -71,7 +82,7 @@ export class DiplomasController {
   // 4. UPDATE DIPLOMA STATUS
 
   @Roles('UNIVERSITY', 'ADMIN')
-  @Patch(':id')
+  @Delete(':id')
   @ApiOperation({ summary: 'Отозвать диплом' })
   @ApiParam({ name: 'id', description: 'ID диплома' })
   update(
@@ -123,8 +134,8 @@ export class DiplomasController {
   @Get('search')
   @ApiOperation({ summary: 'Поиск диплома по номеру' })
   @ApiQuery({ name: 'number', description: 'Номер диплома', required: true })
-  search(@Query('number') number: string) {
-    return this.diplomasService.searchByNumber(number);
+  search(@Query('number') number: string, @Req() req: Request) {
+    return this.diplomasService.searchByNumber(number, req.ip ?? 'unknown');
   }
 
   // 9. GET BY ID

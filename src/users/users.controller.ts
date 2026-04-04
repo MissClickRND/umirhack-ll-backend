@@ -5,6 +5,7 @@ import {
   Param,
   ParseIntPipe,
   Patch,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -15,6 +16,7 @@ import {
   ApiCookieAuth,
   ApiOkResponse,
   ApiOperation,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { UserListItemDto } from './dto/user-list-item.dto';
@@ -35,6 +37,7 @@ export class UsersController {
   constructor(private readonly users: UsersService) {}
 
   @ApiOperation({ summary: 'Получение всех пользователей (Админ)' })
+  
   @ApiOkResponse({
     description:
       'Массив пользователей: id, email, role, createdAt. Пароль и токены не возвращаются.',
@@ -57,8 +60,13 @@ export class UsersController {
   })
   @Roles('ADMIN')
   @Get('users')
-  getAll() {
-    return this.users.getAll();
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  getAll(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.users.getAll(
+      page ? Number(page) : undefined,
+      limit ? Number(limit) : undefined,
+    );
   }
 
   @ApiOperation({ summary: 'Получение всех вузов (Админ)' })
