@@ -139,6 +139,12 @@ jobs:
             log "Using compose command: ${COMPOSE}"
             log "Using compose file: ${COMPOSE_FILE}"
 
-            ${COMPOSE} -f "${COMPOSE_FILE}" up -d --build || fail "compose up failed"
+            if ! ${COMPOSE} -f "${COMPOSE_FILE}" up -d --build; then
+              log "compose up failed, current docker published ports:"
+              if command -v docker >/dev/null 2>&1; then
+                docker ps --format 'table {{.Names}}\t{{.Ports}}' || true
+              fi
+              fail "compose up failed"
+            fi
             ${COMPOSE} -f "${COMPOSE_FILE}" ps || fail "compose ps failed"
             ${COMPOSE} -f "${COMPOSE_FILE}" logs backend --tail=50 || true

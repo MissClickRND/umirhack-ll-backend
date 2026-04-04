@@ -11,6 +11,7 @@ docker-compose up -d
 ```env
 DATABASE_URL=postgresql://admin:admin@localhost:5432/backend_db
 PORT=3000
+BACKEND_HOST_PORT=3000
 
 JWT_ACCESS_SECRET=access_secret_very_long
 JWT_REFRESH_SECRET=refresh_secret_very_long
@@ -91,6 +92,12 @@ REFRESH_COOKIE_NAME=refresh_token
 
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://miss-click.ru,https://miss-click.ru,https://www.miss-click.ru
 CORS_CREDENTIALS=true
+```
+
+If port `3000` is already occupied on VPS, keep `PORT=3000` and set another external port, for example:
+
+```env
+BACKEND_HOST_PORT=3001
 ```
 
 ### Legacy env mapping from old microservices

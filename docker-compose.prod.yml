@@ -30,7 +30,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-backend_db}
       PORT: ${PORT:-3000}
     ports:
-      - "${PORT:-3000}:3000"
+      - "${BACKEND_HOST_PORT:-3000}:${PORT:-3000}"
 
 volumes:
   postgres_data:
