@@ -7,9 +7,7 @@ COPY prisma.config.ts ./
 
 RUN npm ci
 
-COPY nest-cli.json ./
-COPY tsconfig*.json ./
-COPY src ./src
+COPY . .
 
 ARG DATABASE_URL=postgresql://postgres:postgres@localhost:5432/backend_db
 ENV DATABASE_URL=${DATABASE_URL}
