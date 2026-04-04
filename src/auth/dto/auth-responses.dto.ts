@@ -15,14 +15,7 @@ export class AuthUserBriefDto {
   @ApiPropertyOptional({
     example: 10,
     nullable: true,
-    description: 'ID университета (camelCase)',
-  })
-  universityId?: number | null;
-
-  @ApiPropertyOptional({
-    example: 10,
-    nullable: true,
-    description: 'ID университета (snake_case)',
+    description: 'ID университета',
   })
   university_id?: number | null;
 }
@@ -50,14 +43,7 @@ export class AuthStatusUserDto {
   @ApiPropertyOptional({
     example: 10,
     nullable: true,
-    description: 'ID университета (camelCase)',
-  })
-  universityId?: number | null;
-
-  @ApiPropertyOptional({
-    example: 10,
-    nullable: true,
-    description: 'ID университета (snake_case)',
+    description: 'ID университета',
   })
   university_id?: number | null;
 }
