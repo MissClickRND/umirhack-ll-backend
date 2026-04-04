@@ -1,9 +1,10 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
     IsDate,
     IsEnum,
     IsNumber,
+    IsOptional,
     IsString,
     IsUUID,
 } from 'class-validator';
@@ -28,9 +29,10 @@ export class CreateDiplomaDto {
     @IsUUID()
     universityId!: string;
 
-    @ApiProperty({ example: 1 })
+    @ApiPropertyOptional({ example: 1 })
+    @IsOptional()
     @IsNumber()
-    userId!: number;
+    userId?: number;
 
     @ApiProperty({ example: '2025-06-01' })
     @Type(() => Date)

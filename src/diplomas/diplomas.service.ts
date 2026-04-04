@@ -1,10 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateDiplomaBatchDto } from "./dto/create-diplomas-batch.dto";
-import { CreateDiplomaDto } from "./dto/create-diploma.dto";
 import { CreateQrTokenDto } from "./dto/create-qr-token.dto";
 import { CryptoService } from "../crypto/crypto.service";
 import { DiplomaStatus, Prisma } from "@prisma/client";
+import { UpdateDiplomaStatusDto } from "./dto/update-diploma-status.dto";
 
 @Injectable()
 export class DiplomasService {
@@ -16,19 +16,26 @@ export class DiplomasService {
     ) {
         this.key = this.cryptoService.generateSymmetricKey();
     }
-
+    
     async createBatch(dto: CreateDiplomaBatchDto) {
-        const diplomasToCreate: Prisma.DiplomaCreateManyInput[] = [];
 
-        for (const d of dto.diplomas) {
+        const universityIds = [...new Set(dto.diplomas.map(d => d.universityId))];
 
-            const university = await this.prisma.university.findUnique({
-                where: { id: d.universityId },
-            });
+    const universities = await this.prisma.university.findMany({
+        where: { id: { in: universityIds } },
+    });
 
-            if (!university) {
-                throw new BadRequestException(`University not found: ${d.universityId}`);
-            }
+    const universityMap = new Map(
+        universities.map(u => [u.id, u])
+    );
+
+    if (universityMap.size !== universityIds.length) {
+        throw new BadRequestException('Some universities not found');
+    }
+
+    const diplomasToCreate: Prisma.DiplomaCreateManyInput[] =
+        dto.diplomas.map(d => {
+            const university = universityMap.get(d.universityId)!;
 
             if (!university.encryptedSymmetricKey) {
                 throw new BadRequestException('University has no symmetric key');
@@ -51,7 +58,9 @@ export class DiplomasService {
                 symmetricKey,
             );
 
-            const registrationNumberHash = this.cryptoService.hash(d.registrationNumber);
+            const registrationNumberHash = this.cryptoService.hash(
+                d.registrationNumber,
+            );
 
             const payload = JSON.stringify({
                 fullName: d.fullNameAuthor,
@@ -62,7 +71,7 @@ export class DiplomasService {
 
             const signature = this.cryptoService.sign(payload, privateKey);
 
-            diplomasToCreate.push({
+            return {
                 fullNameAuthorEncrypted: fullNameEncrypted,
                 registrationNumberEncrypted,
                 registrationNumberHash,
@@ -75,13 +84,13 @@ export class DiplomasService {
                 status: DiplomaStatus.ACTIVE,
 
                 signature,
-            });
-        }
-
-        return this.prisma.diploma.createMany({
-            data: diplomasToCreate,
+            };
         });
-    }
+
+    return this.prisma.diploma.createMany({
+        data: diplomasToCreate,
+    });
+}
 
     async findByUniversity(universityId: string) {
         return this.prisma.diploma.findMany({
@@ -94,9 +103,14 @@ export class DiplomasService {
 
 
     async findByUser(userId: string) {
+        const parsedUserId = Number(userId);
+        if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+            throw new BadRequestException('Invalid userId');
+        }
+
         return this.prisma.diploma.findMany({
             where: {
-                userId: parseInt(userId),
+                userId: parsedUserId,
             },
             include: {
                 university: true,
@@ -121,31 +135,36 @@ export class DiplomasService {
         return diploma;
     }
 
-    async update(id: string, dto: any) {
+    async update(id: string, dto: UpdateDiplomaStatusDto) {
+    const diploma = await this.prisma.diploma.findUnique({
+        where: { id },
+    });
+
+    if (!diploma) {
+        throw new NotFoundException('Diploma not found');
+    }
+
+    return this.prisma.diploma.update({
+        where: { id },
+        data: {
+            status: dto.status,
+        },
+    });
+}
+
+
+    async createQrToken(diplomaId: string, dto: CreateQrTokenDto, requesterUserId: number) {
         const diploma = await this.prisma.diploma.findUnique({
-            where: { id },
+            where: { id: diplomaId },
+            select: { id: true, userId: true },
         });
 
         if (!diploma) {
             throw new NotFoundException('Diploma not found');
         }
 
-        return this.prisma.diploma.update({
-            where: { id },
-            data: {
-                ...dto,
-            },
-        });
-    }
-
-
-    async createQrToken(diplomaId: string, dto: CreateQrTokenDto) {
-        const diploma = await this.prisma.diploma.findUnique({
-            where: { id: diplomaId },
-        });
-
-        if (!diploma) {
-            throw new NotFoundException('Diploma not found');
+        if (diploma.userId !== requesterUserId) {
+            throw new ForbiddenException('You can create token only for your diploma');
         }
 
         const token = crypto.randomUUID();
@@ -230,6 +249,30 @@ export class DiplomasService {
         return record.diploma;
     }
 
+    async revokeQrToken(diplomaId: string) {
+        const token = await this.prisma.diplomaToken.findFirst({
+            where: {
+                diplomaId,
+                revokedAt: null, // находим активные
+            },
+            orderBy: {
+                createdAt: 'desc', // берём последний
+            },
+        });
+
+        if (!token) {
+            throw new NotFoundException('Active token not found');
+        }
+
+        await this.prisma.diplomaToken.update({
+            where: { id: token.id },
+            data: {
+                revokedAt: new Date(),
+            },
+        });
+
+        return { message: 'Token revoked' };
+    }
 
     async searchByNumber(number: string) {
         const hash = this.cryptoService.hash(number);

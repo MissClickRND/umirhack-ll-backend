@@ -11,6 +11,11 @@ import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swag
 import { DiplomasService } from './diplomas.service';
 import { CreateDiplomaBatchDto } from './dto/create-diplomas-batch.dto';
 import { CreateQrTokenDto } from './dto/create-qr-token.dto';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Public } from 'src/auth/decorators/public.decorator';
+import { UpdateDiplomaStatusDto } from './dto/update-diploma-status.dto';
+import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import type { AuthUser } from 'src/auth/types/auth-user.type';
 
 @ApiTags('diplomas')
 @Controller('diplomas')
@@ -19,6 +24,7 @@ export class DiplomasController {
 
     // 1. CREATE BATCH
 
+    @Roles("UNIVERSITY")
     @Post('batch')
     @ApiOperation({ summary: 'Создать batch дипломов' })
     @ApiBody({ type: CreateDiplomaBatchDto })
@@ -28,6 +34,7 @@ export class DiplomasController {
 
     // 2. GET BY UNIVERSITY
 
+    @Roles("UNIVERSITY", "ADMIN")
     @Get('university/:universityId')
     @ApiOperation({ summary: 'Получить дипломы по университету' })
     @ApiParam({ name: 'universityId', description: 'ID университета' })
@@ -55,15 +62,17 @@ export class DiplomasController {
 
     // 5. UPDATE / REVOKE
 
+    @Roles("UNIVERSITY")
     @Patch(':id')
     @ApiOperation({ summary: 'Обновить или отозвать диплом' })
     @ApiParam({ name: 'id', description: 'ID диплома' })
-    update(@Param('id') id: string, @Body() dto: any) {
+    update(@Param('id') id: string, @Body() dto: UpdateDiplomaStatusDto) {
         return this.diplomasService.update(id, dto);
     }
 
     // 6. CREATE QR TOKEN
 
+    @Roles("STUDENT")
     @Post(':id/qr-token')
     @ApiOperation({ summary: 'Создать QR-токен для диплома' })
     @ApiParam({ name: 'id', description: 'ID диплома' })
@@ -71,12 +80,14 @@ export class DiplomasController {
     createQrToken(
         @Param('id') id: string,
         @Body() dto: CreateQrTokenDto,
+        @CurrentUser() user: AuthUser,
     ) {
-        return this.diplomasService.createQrToken(id, dto);
+        return this.diplomasService.createQrToken(id, dto, user.id);
     }
 
     // 7. GET BY QR TOKEN
 
+    @Public()
     @Get('qr-token')
     @ApiOperation({ summary: 'Получить диплом по QR-токену' })
     @ApiQuery({ name: 'token', description: 'QR токен', required: true })
@@ -87,6 +98,7 @@ export class DiplomasController {
     // 8. SEARCH BY NUMBER
     // GET /diplomas/search?number=...
 
+    @Public()
     @Get('search')
     @ApiOperation({ summary: 'Поиск диплома по номеру' })
     @ApiQuery({ name: 'number', description: 'Номер диплома', required: true })
