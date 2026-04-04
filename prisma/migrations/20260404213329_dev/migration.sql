@@ -48,6 +48,7 @@ CREATE TABLE "diploma_tokens" (
     "id" SERIAL NOT NULL,
     "diploma_id" INTEGER NOT NULL,
     "token_hash" TEXT NOT NULL,
+    "encrypted_token" TEXT,
     "expires_at" TIMESTAMP(3),
     "revoked_at" TIMESTAMP(3),
     "is_one_time" BOOLEAN NOT NULL DEFAULT false,

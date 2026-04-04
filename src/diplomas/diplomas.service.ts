@@ -143,11 +143,14 @@ export class DiplomasService {
     requesterUserId?: number,
     page?: number,
     limit?: number,
+    search?: string,
   ) {
     let targetUniversityId = universityId;
 
     const safePage = !page || page < 1 ? 1 : page;
     const safeLimit = !limit || limit < 1 || limit > 50 ? 10 : limit;
+    const normalizedSearch = search?.trim() ?? '';
+    const hasSearch = normalizedSearch.length > 0;
 
     if (requesterUserId) {
       const requester = await this.prisma.user.findUnique({
@@ -185,23 +188,94 @@ export class DiplomasService {
       throw new NotFoundException('University not found');
     }
 
-    const skip = (safePage - 1) * safeLimit;
+    if (!hasSearch) {
+      const skip = (safePage - 1) * safeLimit;
 
-    const total = await this.prisma.diploma.count({
-      where: { universityId: targetUniversityId },
-    });
+      const total = await this.prisma.diploma.count({
+        where: { universityId: targetUniversityId },
+      });
+
+      const diplomas = await this.prisma.diploma.findMany({
+        where: { universityId: targetUniversityId },
+        include: {
+          university: true,
+        },
+        skip,
+        take: safeLimit,
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const data = diplomas.map((d) => this.mapper.toHumanDiploma(d));
+
+      return {
+        data,
+        meta: {
+          page: safePage,
+          limit: safeLimit,
+          itemsOnPage: data.length,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / safeLimit)),
+        },
+      };
+    }
+
+    const normalizeForSearch = (value: string) =>
+      value.toLowerCase().replace(/ё/g, 'е').trim();
+
+    const searchLower = normalizeForSearch(normalizedSearch);
+    const isRegistrationNumberSearch = /^\d{13}$/.test(normalizedSearch);
+
+    const where: Prisma.DiplomaWhereInput = {
+      universityId: targetUniversityId,
+      ...(isRegistrationNumberSearch
+        ? {
+            registrationNumberHash: this.cryptoService.hash(normalizedSearch),
+          }
+        : {}),
+    };
 
     const diplomas = await this.prisma.diploma.findMany({
-      where: { universityId: targetUniversityId },
+      where,
       include: {
         university: true,
       },
-      skip,
-      take: safeLimit,
       orderBy: { createdAt: 'desc' },
     });
 
-    const data = diplomas.map((d) => this.mapper.toHumanDiploma(d));
+    const filtered = diplomas
+      .map((d) => this.mapper.toHumanDiploma(d))
+      .filter((diploma) => {
+        const statusRu =
+          diploma.status === 'VALID' ? 'действителен' : 'отозван';
+        const degreeRuMap: Record<string, string> = {
+          BACHELOR: 'бакалавриат',
+          MAGISTRACY: 'магистратура',
+          SPECIALIST: 'специалитет',
+          DOCTORATE: 'докторантура',
+        };
+        const degreeRu = degreeRuMap[diploma.degreeLevel] ?? '';
+
+        const haystack = [
+          diploma.fullNameAuthor,
+          diploma.registrationNumber,
+          diploma.specialty,
+          diploma.degreeLevel,
+          degreeRu,
+          diploma.status,
+          statusRu,
+          diploma.university.name,
+          diploma.university.shortName ?? '',
+        ]
+          .join(' ')
+          .replace(/ё/g, 'е')
+          .toLowerCase();
+
+        return haystack.includes(searchLower);
+      });
+
+    const total = filtered.length;
+    const skip = (safePage - 1) * safeLimit;
+    const data = filtered.slice(skip, skip + safeLimit);
 
     return {
       data,

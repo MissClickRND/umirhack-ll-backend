@@ -8,6 +8,7 @@
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "db:seed": "prisma db seed",
     "prestart": "node scripts/free-port.js",
     "start": "nest start",
     "prestart:dev": "node scripts/free-port.js",
@@ -95,5 +96,8 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   }
 }

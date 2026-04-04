@@ -55,17 +55,26 @@ export class DiplomasController {
   @ApiQuery({ name: 'universityId', required: true, example: 1 })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    example: 'Иванов',
+    description:
+      'Поиск по ФИО, номеру диплома, специальности, уровню, статусу и названию вуза',
+  })
   getByUniversity(
     @Query('universityId', ParseIntPipe) universityId: number,
     @CurrentUser() user: AuthUser,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('search') search?: string,
   ) {
     return this.diplomasService.findByUniversity(
       universityId,
       user?.id,
       page ? Number(page) : undefined,
       limit ? Number(limit) : undefined,
+      search,
     );
   }
 
@@ -85,7 +94,7 @@ export class DiplomasController {
   // 4. UPDATE DIPLOMA STATUS
 
   @Roles('UNIVERSITY', 'ADMIN')
-  @Delete(':id')
+  @Patch(':id')
   @ApiOperation({ summary: 'Отозвать диплом' })
   @ApiParam({ name: 'id', description: 'ID диплома' })
   update(

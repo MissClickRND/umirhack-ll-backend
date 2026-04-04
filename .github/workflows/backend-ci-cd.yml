@@ -1,0 +1,214 @@
+name: Backend CI/CD
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Build
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/backend_db
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build
+        run: npm run build
+
+  deploy:
+    name: Deploy to VPS
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: ci
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          BACKEND_PROJECT_DIR: ${{ secrets.BACKEND_PROJECT_DIR }}
+          DEPLOY_SHA: ${{ github.sha }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script_stop: true
+          envs: BACKEND_PROJECT_DIR,DEPLOY_SHA
+          script: |
+            set -euo pipefail
+
+            DEFAULT_BACKEND_DIR="/opt/umirhack-backend/umirhack-ll-backend"
+            PROJECT_DIR=""
+
+            if [ -n "${BACKEND_PROJECT_DIR:-}" ]; then
+              CANDIDATES="${BACKEND_PROJECT_DIR} ${BACKEND_PROJECT_DIR%/}/backend"
+            else
+              CANDIDATES="$DEFAULT_BACKEND_DIR /opt/umirhack/backend /opt/umirhack/umirhack-ll/backend"
+            fi
+
+            for dir in $CANDIDATES; do
+              if [ -f "$dir/docker-compose.prod.yml" ]; then
+                PROJECT_DIR="$dir"
+                break
+              fi
+            done
+
+            if [ -z "$PROJECT_DIR" ]; then
+              echo "Cannot find backend directory with docker-compose.prod.yml"
+              echo "Checked candidates: $CANDIDATES"
+              exit 1
+            fi
+
+            cd "$PROJECT_DIR"
+
+            # Some VPS setups clone repo as root; allow git operations for this path.
+            git config --global --add safe.directory "$PROJECT_DIR" || true
+
+            if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+              echo "Directory is not a git repository or git has no access: $PROJECT_DIR"
+              echo "Current directory listing:"
+              ls -la || true
+              exit 1
+            fi
+
+            if [ -n "${DEPLOY_SHA:-}" ]; then
+              echo "Deploying exact commit: $DEPLOY_SHA"
+              git fetch --prune origin "$DEPLOY_SHA"
+              git checkout --force --detach "$DEPLOY_SHA"
+              git reset --hard "$DEPLOY_SHA"
+            else
+              git fetch --prune origin main
+              git checkout --force main
+              git reset --hard origin/main
+            fi
+
+            REQUIRED_FILES="src/main.ts src/app.module.ts src/auth/guards/jwt-access.guard.ts src/auth/guards/jwt-refresh.guard.ts src/auth/types/auth-user.type.ts src/common/interceptors/logging.interceptor.ts"
+            for file in $REQUIRED_FILES; do
+              if [ ! -f "$file" ]; then
+                echo "Missing source file in deploy checkout: $file"
+                echo "Current commit: $(git rev-parse --short HEAD)"
+                exit 1
+              fi
+            done
+
+            if command -v sudo >/dev/null 2>&1; then
+              SUDO="sudo"
+            else
+              SUDO=""
+            fi
+
+            DOCKER_CMD="docker"
+
+            if docker compose version >/dev/null 2>&1; then
+              COMPOSE_CMD="docker compose"
+            elif command -v docker-compose >/dev/null 2>&1; then
+              COMPOSE_CMD="docker-compose"
+            else
+              echo "Docker Compose is not installed"
+              exit 1
+            fi
+
+            if ! docker info >/dev/null 2>&1; then
+              if [ -n "$SUDO" ] && $SUDO docker info >/dev/null 2>&1; then
+                DOCKER_CMD="$SUDO docker"
+                if [ "$COMPOSE_CMD" = "docker compose" ]; then
+                  COMPOSE_CMD="$SUDO docker compose"
+                else
+                  COMPOSE_CMD="$SUDO docker-compose"
+                fi
+              else
+                echo "Docker daemon is not accessible for current user"
+                exit 1
+              fi
+            fi
+
+            BACKEND_HOST_PORT="3000"
+            if [ -f ".env" ]; then
+              ENV_BACKEND_HOST_PORT="$(grep -E '^BACKEND_HOST_PORT=' .env | tail -n 1 | cut -d '=' -f 2- | tr -d '\r' || true)"
+              if [ -n "${ENV_BACKEND_HOST_PORT:-}" ]; then
+                BACKEND_HOST_PORT="$ENV_BACKEND_HOST_PORT"
+              fi
+            fi
+
+            PORT_CONFLICTS="$($DOCKER_CMD ps --format '{{.Names}} {{.Ports}}' | grep ":$BACKEND_HOST_PORT->" || true)"
+            if [ -n "$PORT_CONFLICTS" ] && ! echo "$PORT_CONFLICTS" | grep -q '^backend_app '; then
+              echo "Host port $BACKEND_HOST_PORT is already occupied:"
+              echo "$PORT_CONFLICTS"
+              echo "Set BACKEND_HOST_PORT in $PROJECT_DIR/.env to a free port (for example 3001) and update reverse proxy upstream."
+              exit 1
+            fi
+
+            $COMPOSE_CMD -f docker-compose.prod.yml pull || true
+            $COMPOSE_CMD -f docker-compose.prod.yml build backend
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d postgres
+
+            PRISMA_CLI_VERSION="7.4.1"
+            if ! $COMPOSE_CMD -f docker-compose.prod.yml run --rm --no-deps backend npx -y prisma@${PRISMA_CLI_VERSION} migrate reset --force; then
+              echo "Prisma migrate reset (drop + migrate + seed) failed"
+              exit 1
+            fi
+
+            if ! $COMPOSE_CMD -f docker-compose.prod.yml run --rm --no-deps backend node prisma/seed.js; then
+              echo "Explicit seed failed"
+              exit 1
+            fi
+
+            POSTGRES_USER_VALUE="admin"
+            POSTGRES_DB_VALUE="backend_db"
+            if [ -f ".env" ]; then
+              ENV_POSTGRES_USER="$(grep -E '^POSTGRES_USER=' .env | tail -n 1 | cut -d '=' -f 2- | tr -d '\r' || true)"
+              ENV_POSTGRES_DB="$(grep -E '^POSTGRES_DB=' .env | tail -n 1 | cut -d '=' -f 2- | tr -d '\r' || true)"
+              if [ -n "${ENV_POSTGRES_USER:-}" ]; then
+                POSTGRES_USER_VALUE="$ENV_POSTGRES_USER"
+              fi
+              if [ -n "${ENV_POSTGRES_DB:-}" ]; then
+                POSTGRES_DB_VALUE="$ENV_POSTGRES_DB"
+              fi
+            fi
+
+            ADMIN_ROW="$($COMPOSE_CMD -f docker-compose.prod.yml exec -T postgres psql -U "$POSTGRES_USER_VALUE" -d "$POSTGRES_DB_VALUE" -tAc "SELECT email || '|' || role FROM \"User\" WHERE email='admin@example.com' LIMIT 1;" | tr -d '\r' || true)"
+            if [ -z "$ADMIN_ROW" ]; then
+              echo "Admin user verification failed: admin@example.com not found"
+              exit 1
+            fi
+            echo "Admin user verified in DB: $ADMIN_ROW"
+
+            if ! $COMPOSE_CMD -f docker-compose.prod.yml up -d backend; then
+              echo "docker compose up failed. Host port diagnostics for $BACKEND_HOST_PORT:"
+              $DOCKER_CMD ps --format '{{.Names}} {{.Ports}}' | grep ":$BACKEND_HOST_PORT->" || true
+              if command -v ss >/dev/null 2>&1; then
+                if [ -n "$SUDO" ]; then
+                  $SUDO ss -ltnp | grep -E ":$BACKEND_HOST_PORT\\b" || true
+                else
+                  ss -ltnp | grep -E ":$BACKEND_HOST_PORT\\b" || true
+                fi
+              fi
+              exit 1
+            fi
+            $COMPOSE_CMD -f docker-compose.prod.yml ps
