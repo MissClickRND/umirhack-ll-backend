@@ -7,7 +7,8 @@ import type { AuthUserWithRefresh } from '../types/auth-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
 
 function cookieExtractorRefresh(req: Request): string | null {
-  return req?.cookies?.refreshToken ?? null;
+  const refreshCookieName = process.env.REFRESH_COOKIE_NAME ?? 'refreshToken';
+  return req?.cookies?.[refreshCookieName] ?? null;
 }
 
 @Injectable()
@@ -37,7 +38,8 @@ export class JwtRefreshStrategy extends PassportStrategy(
 
     if (!user) throw new UnauthorizedException('User not found');
 
-    const refreshToken = req.cookies?.refreshToken;
+    const refreshCookieName = process.env.REFRESH_COOKIE_NAME ?? 'refreshToken';
+    const refreshToken = req.cookies?.[refreshCookieName];
 
     return {
       id: payload.sub,

@@ -7,6 +7,22 @@ import { AllExceptionFilter } from './common/filters/all-exeption.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 
+function parseCorsOrigins(raw?: string): string[] | true {
+  const value = (raw ?? 'http://localhost:5173,http://localhost:3000').trim();
+  if (value === '*') return true;
+
+  const origins = value
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+  return origins.length > 0 ? origins : ['http://localhost:5173'];
+}
+
+function parseCorsCredentials(raw?: string): boolean {
+  return (raw ?? 'true').toLowerCase() === 'true';
+}
+
 async function bootstrap() {
     const app = await NestFactory.create(AppModule);
     app.useGlobalInterceptors(
@@ -33,10 +49,13 @@ async function bootstrap() {
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('docs', app, document);
 
-    app.enableCors({
-        credentials: true,
-        origin: 'http://localhost:5173,https://miss-click.ru',
-    });
+  const corsOrigins = parseCorsOrigins(process.env.CORS_ORIGINS);
+  const corsCredentials = parseCorsCredentials(process.env.CORS_CREDENTIALS);
+
+  app.enableCors({
+    credentials: corsCredentials,
+    origin: corsOrigins,
+  });
 
     await app.listen(process.env.PORT ?? 3000);
 }

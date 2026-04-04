@@ -33,18 +33,33 @@ export class AuthController {
         return (this.config.get<string>('COOKIE_SECURE') ?? 'false') === 'true';
     }
 
-    private cookieSameSite(): 'lax' | 'strict' | 'none' {
-        const v = (
-            this.config.get<string>('COOKIE_SAMESITE') ?? 'lax'
-        ).toLowerCase();
-        if (v === 'none' || v === 'strict' || v === 'lax') return v;
-        return 'lax';
-    }
+  private cookieSameSite(): 'lax' | 'strict' | 'none' {
+    const v = (
+      this.config.get<string>('COOKIE_SAMESITE') ??
+      this.config.get<string>('COOKIE_SAME_SITE') ??
+      'lax'
+    ).toLowerCase();
+    if (v === 'none' || v === 'strict' || v === 'lax') return v;
+    return 'lax';
+  }
 
-    private accessMaxAgeMs() {
-        const v = this.config.get<string>('JWT_ACCESS_EXPIRES') ?? '15m';
-        return parseDurationMs(v);
-    }
+  private cookieDomain() {
+    const value = this.config.get<string>('COOKIE_DOMAIN')?.trim();
+    return value ? value : undefined;
+  }
+
+  private accessCookieName() {
+    return this.config.get<string>('ACCESS_COOKIE_NAME') ?? 'accessToken';
+  }
+
+  private refreshCookieName() {
+    return this.config.get<string>('REFRESH_COOKIE_NAME') ?? 'refreshToken';
+  }
+
+  private accessMaxAgeMs() {
+    const v = this.config.get<string>('JWT_ACCESS_EXPIRES') ?? '15m';
+    return parseDurationMs(v);
+  }
 
     private refreshMaxAgeMs() {
         const v = this.config.get<string>('JWT_REFRESH_EXPIRES') ?? '7d';
@@ -59,15 +74,18 @@ export class AuthController {
     ) {
         const result = await this.auth.register(dto);
 
-        setAuthCookies({
-            res,
-            accessToken: result.accessToken,
-            refreshToken: result.refreshToken,
-            secure: this.cookieSecure(),
-            sameSite: this.cookieSameSite(),
-            accessMaxAgeMs: this.accessMaxAgeMs(),
-            refreshMaxAgeMs: this.refreshMaxAgeMs(),
-        });
+    setAuthCookies({
+      res,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      secure: this.cookieSecure(),
+      sameSite: this.cookieSameSite(),
+      domain: this.cookieDomain(),
+      accessCookieName: this.accessCookieName(),
+      refreshCookieName: this.refreshCookieName(),
+      accessMaxAgeMs: this.accessMaxAgeMs(),
+      refreshMaxAgeMs: this.refreshMaxAgeMs(),
+    });
 
         return { user: result.user };
     }
@@ -80,15 +98,18 @@ export class AuthController {
     ) {
         const result = await this.auth.login(dto);
 
-        setAuthCookies({
-            res,
-            accessToken: result.accessToken,
-            refreshToken: result.refreshToken,
-            secure: this.cookieSecure(),
-            sameSite: this.cookieSameSite(),
-            accessMaxAgeMs: this.accessMaxAgeMs(),
-            refreshMaxAgeMs: this.refreshMaxAgeMs(),
-        });
+    setAuthCookies({
+      res,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      secure: this.cookieSecure(),
+      sameSite: this.cookieSameSite(),
+      domain: this.cookieDomain(),
+      accessCookieName: this.accessCookieName(),
+      refreshCookieName: this.refreshCookieName(),
+      accessMaxAgeMs: this.accessMaxAgeMs(),
+      refreshMaxAgeMs: this.refreshMaxAgeMs(),
+    });
 
         return { user: result.user };
     }
@@ -106,15 +127,18 @@ export class AuthController {
             user.refreshToken,
         );
 
-        setAuthCookies({
-            res,
-            accessToken: result.accessToken,
-            refreshToken: result.refreshToken,
-            secure: this.cookieSecure(),
-            sameSite: this.cookieSameSite(),
-            accessMaxAgeMs: this.accessMaxAgeMs(),
-            refreshMaxAgeMs: this.refreshMaxAgeMs(),
-        });
+    setAuthCookies({
+      res,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      secure: this.cookieSecure(),
+      sameSite: this.cookieSameSite(),
+      domain: this.cookieDomain(),
+      accessCookieName: this.accessCookieName(),
+      refreshCookieName: this.refreshCookieName(),
+      accessMaxAgeMs: this.accessMaxAgeMs(),
+      refreshMaxAgeMs: this.refreshMaxAgeMs(),
+    });
 
         return { user: result.user };
     }
@@ -127,10 +151,13 @@ export class AuthController {
     ) {
         await this.auth.logout(user.id);
 
-        clearAuthCookies(res, {
-            secure: this.cookieSecure(),
-            sameSite: this.cookieSameSite(),
-        });
+    clearAuthCookies(res, {
+      secure: this.cookieSecure(),
+      sameSite: this.cookieSameSite(),
+      domain: this.cookieDomain(),
+      accessCookieName: this.accessCookieName(),
+      refreshCookieName: this.refreshCookieName(),
+    });
 
         return { ok: true };
     }

@@ -7,7 +7,8 @@ import type { AuthUser, Role } from '../types/auth-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
 
 function cookieExtractorAccess(req: Request): string | null {
-  return req?.cookies?.accessToken ?? null;
+  const accessCookieName = process.env.ACCESS_COOKIE_NAME ?? 'accessToken';
+  return req?.cookies?.[accessCookieName] ?? null;
 }
 
 type JwtAccessPayload = {
