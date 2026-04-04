@@ -1,30 +1,23 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import {
+  ApiBody,
   ApiExtraModels,
-  ApiOperation,
   ApiOkResponse,
+  ApiOperation,
   ApiParam,
   ApiTags,
-  getSchemaPath,
 } from '@nestjs/swagger';
 import { Public } from '../auth/decorators/public.decorator';
 import { PublicApiServiseService } from './public-api-servise.service';
 import { BulkVerifyDiplomasDto } from './dto/bulk-verify-diplomas.dto';
 import {
-  BulkVerifyDiplomaResponseDto,
   PublicDiplomaDetailDto,
   PublicDiplomaUniversityDto,
-  PublicDiplomaUserDto,
 } from './dto/bulk-verify-diploma-response.dto';
 
-@ApiTags('Public API Servise')
-@ApiExtraModels(
-  BulkVerifyDiplomaResponseDto,
-  PublicDiplomaUserDto,
-  PublicDiplomaDetailDto,
-  PublicDiplomaUniversityDto,
-)
+@ApiTags('Public API')
 @Controller('employer')
+@ApiExtraModels(PublicDiplomaDetailDto, PublicDiplomaUniversityDto)
 export class PublicApiServiseController {
   constructor(
     private readonly publicApiServiseService: PublicApiServiseService,
@@ -38,15 +31,23 @@ export class PublicApiServiseController {
   })
   @ApiOkResponse({
     description:
-      'Если передан diplomaNumber — возвращает один объект. Если передан diplomaNumbers — возвращает массив объектов в том же порядке.',
-    schema: {
-      oneOf: [
-        { $ref: getSchemaPath(BulkVerifyDiplomaResponseDto) },
-        {
-          type: 'array',
-          items: { $ref: getSchemaPath(BulkVerifyDiplomaResponseDto) },
+      'Всегда возвращает массив детальных объектов дипломов (для одного номера — массив из одного элемента).',
+    type: PublicDiplomaDetailDto,
+    isArray: true,
+  })
+  @ApiBody({
+    type: BulkVerifyDiplomasDto,
+    examples: {
+      single: {
+        summary: 'Проверка одного номера',
+        value: { diplomaNumber: '1234567890123' },
+      },
+      batch: {
+        summary: 'Проверка списка номеров',
+        value: {
+          diplomaNumbers: ['1234567890123', '9876543210987'],
         },
-      ],
+      },
     },
   })
   verify(@Body() dto: BulkVerifyDiplomasDto) {

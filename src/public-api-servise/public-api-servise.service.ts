@@ -5,15 +5,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DiplomaStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../crypto/crypto.service';
 import { BulkVerifyDiplomasDto } from './dto/bulk-verify-diplomas.dto';
-import {
-  BulkVerifyDiplomaResponseDto,
-  PublicDiplomaDetailDto,
-  PublicDiplomaUserDto,
-} from './dto/bulk-verify-diploma-response.dto';
+import { PublicDiplomaDetailDto } from './dto/bulk-verify-diploma-response.dto';
 
 const DIPLOMA_NUMBER_RE = /^\d{13}$/;
 
@@ -66,85 +61,6 @@ export class PublicApiServiseService {
     } catch {
       return null;
     }
-  }
-
-  private buildUserInfo(input: {
-    user: { id: number; email: string } | null;
-    fullName: string | null;
-  }): PublicDiplomaUserDto | null {
-    const hasAnyUserInfo = Boolean(input.user) || Boolean(input.fullName);
-
-    if (!hasAnyUserInfo) {
-      return null;
-    }
-
-    return {
-      id: input.user?.id ?? null,
-      email: input.user?.email ?? null,
-      fullName: input.fullName,
-    };
-  }
-
-  private async lookupByNumber(
-    diplomaNumber: string,
-  ): Promise<BulkVerifyDiplomaResponseDto> {
-    const hash = this.cryptoService.hash(diplomaNumber);
-
-    const diploma = await this.prisma.diploma.findFirst({
-      where: { registrationNumberHash: hash },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-          },
-        },
-        university: {
-          select: {
-            encryptedSymmetricKey: true,
-          },
-        },
-      },
-    });
-
-    if (!diploma) {
-      return {
-        diplomaNumber,
-        status: DiplomaStatus.REVOKED,
-        user: null,
-      };
-    }
-
-    let fullName: string | null = null;
-    const masterSymmetricKey = this.getDiplomaSymmetricKey();
-    const universityKey = this.resolveUniversitySymmetricKey(
-      diploma.university.encryptedSymmetricKey ?? '',
-      masterSymmetricKey,
-    );
-
-    if (universityKey) {
-      try {
-        fullName = this.cryptoService.decryptSymmetric(
-          diploma.fullNameAuthorEncrypted,
-          universityKey,
-        );
-      } catch {
-        fullName = null;
-      }
-    }
-
-    return {
-      diplomaNumber,
-      status: diploma.status,
-      user: this.buildUserInfo({ user: diploma.user, fullName }),
-    };
-  }
-
-  async verifyOne(
-    diplomaNumber: string,
-  ): Promise<BulkVerifyDiplomaResponseDto> {
-    this.assertDiplomaNumberFormat(diplomaNumber);
-    return this.lookupByNumber(diplomaNumber);
   }
 
   async getDiplomaByNumber(
@@ -215,19 +131,7 @@ export class PublicApiServiseService {
     };
   }
 
-  async verifyMany(
-    diplomaNumbers: string[],
-  ): Promise<BulkVerifyDiplomaResponseDto[]> {
-    diplomaNumbers.forEach((number) => this.assertDiplomaNumberFormat(number));
-
-    return Promise.all(
-      diplomaNumbers.map((number) => this.lookupByNumber(number)),
-    );
-  }
-
-  async verify(
-    dto: BulkVerifyDiplomasDto,
-  ): Promise<BulkVerifyDiplomaResponseDto | BulkVerifyDiplomaResponseDto[]> {
+  async verify(dto: BulkVerifyDiplomasDto): Promise<PublicDiplomaDetailDto[]> {
     const hasSingle = typeof dto.diplomaNumber === 'string';
     const hasMany = Array.isArray(dto.diplomaNumbers);
 
@@ -238,7 +142,7 @@ export class PublicApiServiseService {
     }
 
     if (hasSingle) {
-      return this.verifyOne(dto.diplomaNumber!);
+      return [await this.getDiplomaByNumber(dto.diplomaNumber!)];
     }
 
     if (!dto.diplomaNumbers) {
@@ -247,6 +151,8 @@ export class PublicApiServiseService {
       );
     }
 
-    return this.verifyMany(dto.diplomaNumbers);
+    return Promise.all(
+      dto.diplomaNumbers.map((number) => this.getDiplomaByNumber(number)),
+    );
   }
 }
