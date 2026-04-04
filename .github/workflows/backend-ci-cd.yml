@@ -165,7 +165,16 @@ jobs:
             fi
 
             $COMPOSE_CMD -f docker-compose.prod.yml pull || true
-            if ! $COMPOSE_CMD -f docker-compose.prod.yml up -d --build; then
+            $COMPOSE_CMD -f docker-compose.prod.yml build backend
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d postgres
+
+            PRISMA_CLI_VERSION="7.4.1"
+            if ! $COMPOSE_CMD -f docker-compose.prod.yml run --rm --no-deps backend npx -y prisma@${PRISMA_CLI_VERSION} migrate deploy; then
+              echo "Prisma migrate deploy failed"
+              exit 1
+            fi
+
+            if ! $COMPOSE_CMD -f docker-compose.prod.yml up -d backend; then
               echo "docker compose up failed. Host port diagnostics for $BACKEND_HOST_PORT:"
               $DOCKER_CMD ps --format '{{.Names}} {{.Ports}}' | grep ":$BACKEND_HOST_PORT->" || true
               if command -v ss >/dev/null 2>&1; then
