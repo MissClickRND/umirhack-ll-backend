@@ -169,7 +169,7 @@ jobs:
             $COMPOSE_CMD -f docker-compose.prod.yml up -d postgres
 
             PRISMA_CLI_VERSION="7.4.1"
-            if ! $COMPOSE_CMD -f docker-compose.prod.yml run --rm --no-deps backend npx -y prisma@${PRISMA_CLI_VERSION} migrate reset --force --skip-generate; then
+            if ! $COMPOSE_CMD -f docker-compose.prod.yml run --rm --no-deps backend npx -y prisma@${PRISMA_CLI_VERSION} migrate reset --force; then
               echo "Prisma migrate reset (drop + migrate + seed) failed"
               exit 1
             fi
