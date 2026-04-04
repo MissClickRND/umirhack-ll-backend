@@ -5,8 +5,10 @@ const bcrypt = require('bcrypt');
 const pool = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter: pool });
 
-const ADMIN_EMAIL = 'admin@example.com';
-const ADMIN_PASSWORD = 'SuperPassword123';
+const ADMIN_EMAIL = (process.env.SEED_ADMIN_EMAIL || 'admin@example.com')
+  .toLowerCase()
+  .trim();
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || 'SuperPassword123';
 
 async function main() {
   const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);

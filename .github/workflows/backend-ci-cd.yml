@@ -174,6 +174,31 @@ jobs:
               exit 1
             fi
 
+            if ! $COMPOSE_CMD -f docker-compose.prod.yml run --rm --no-deps backend node prisma/seed.js; then
+              echo "Explicit seed failed"
+              exit 1
+            fi
+
+            POSTGRES_USER_VALUE="admin"
+            POSTGRES_DB_VALUE="backend_db"
+            if [ -f ".env" ]; then
+              ENV_POSTGRES_USER="$(grep -E '^POSTGRES_USER=' .env | tail -n 1 | cut -d '=' -f 2- | tr -d '\r' || true)"
+              ENV_POSTGRES_DB="$(grep -E '^POSTGRES_DB=' .env | tail -n 1 | cut -d '=' -f 2- | tr -d '\r' || true)"
+              if [ -n "${ENV_POSTGRES_USER:-}" ]; then
+                POSTGRES_USER_VALUE="$ENV_POSTGRES_USER"
+              fi
+              if [ -n "${ENV_POSTGRES_DB:-}" ]; then
+                POSTGRES_DB_VALUE="$ENV_POSTGRES_DB"
+              fi
+            fi
+
+            ADMIN_ROW="$($COMPOSE_CMD -f docker-compose.prod.yml exec -T postgres psql -U "$POSTGRES_USER_VALUE" -d "$POSTGRES_DB_VALUE" -tAc "SELECT email || '|' || role FROM \"User\" WHERE email='admin@example.com' LIMIT 1;" | tr -d '\r' || true)"
+            if [ -z "$ADMIN_ROW" ]; then
+              echo "Admin user verification failed: admin@example.com not found"
+              exit 1
+            fi
+            echo "Admin user verified in DB: $ADMIN_ROW"
+
             if ! $COMPOSE_CMD -f docker-compose.prod.yml up -d backend; then
               echo "docker compose up failed. Host port diagnostics for $BACKEND_HOST_PORT:"
               $DOCKER_CMD ps --format '{{.Names}} {{.Ports}}' | grep ":$BACKEND_HOST_PORT->" || true
