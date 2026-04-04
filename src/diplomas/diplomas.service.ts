@@ -88,9 +88,6 @@ export class DiplomasService {
         const symmetricKey = this.resolver.resolveUniversitySymmetricKey(
           university.encryptedSymmetricKey,
         );
-        const privateKey = this.resolver.resolveUniversityPrivateKey(
-          university.encryptedPrivateKey,
-        );
 
         const fullNameEncrypted = this.cryptoService.encryptSymmetric(
           d.fullNameAuthor,
@@ -113,7 +110,13 @@ export class DiplomasService {
           universityId: d.universityId,
         });
 
-        const signature = this.cryptoService.sign(payload, privateKey);
+        const signature = this.cryptoService.sign(
+          payload,
+          this.resolver.resolveUniversityPrivateKey(
+            university.encryptedPrivateKey,
+            university.isPrivateKeyEncrypted,
+          ),
+        );
 
         return {
           fullNameAuthorEncrypted: fullNameEncrypted,
