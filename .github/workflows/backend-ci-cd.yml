@@ -80,14 +80,14 @@ jobs:
 
             [ -d "${BASE_DIR}" ] || fail "Directory does not exist: ${BASE_DIR}"
 
-            if [ -f "${BASE_DIR}/docker-compose.prod.yml" ] || [ -f "${BASE_DIR}/docker-compose.yml" ]; then
+            if [ -d "${BASE_DIR}/.git" ]; then
               PROJECT_DIR="${BASE_DIR}"
-            elif [ -f "${BASE_DIR}/backend/docker-compose.prod.yml" ] || [ -f "${BASE_DIR}/backend/docker-compose.yml" ]; then
+            elif [ -d "${BASE_DIR}/backend/.git" ]; then
               PROJECT_DIR="${BASE_DIR}/backend"
             else
-              FOUND_COMPOSE="$(find "${BASE_DIR}" -maxdepth 4 -type f \( -name docker-compose.prod.yml -o -name docker-compose.yml \) | head -n 1 || true)"
-              [ -n "${FOUND_COMPOSE}" ] || fail "No compose file found under ${BASE_DIR}"
-              PROJECT_DIR="$(dirname "${FOUND_COMPOSE}")"
+              FOUND_GIT_DIR="$(find "${BASE_DIR}" -maxdepth 4 -type d -name .git | head -n 1 || true)"
+              [ -n "${FOUND_GIT_DIR}" ] || fail "No git repository found under ${BASE_DIR}"
+              PROJECT_DIR="$(dirname "${FOUND_GIT_DIR}")"
             fi
 
             log "Resolved PROJECT_DIR=${PROJECT_DIR}"
@@ -99,13 +99,16 @@ jobs:
             if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
               [ -w ".git" ] || fail "No write access to ${PROJECT_DIR}/.git. Fix on VPS: sudo chown -R $(whoami):$(whoami) ${PROJECT_DIR}"
               BRANCH="main"
+              git remote -v | sed -n '1,10p' || true
+              git sparse-checkout disable >/dev/null 2>&1 || true
               git fetch origin "${BRANCH}" || fail "git fetch failed"
               if git show-ref --verify --quiet "refs/heads/${BRANCH}"; then
                 git checkout "${BRANCH}" || fail "git checkout ${BRANCH} failed"
               else
                 git checkout -b "${BRANCH}" "origin/${BRANCH}" || fail "git checkout -b ${BRANCH} failed"
               fi
-              git pull --ff-only origin "${BRANCH}" || fail "git pull failed"
+              git reset --hard "origin/${BRANCH}" || fail "git reset --hard origin/${BRANCH} failed"
+              git clean -fd -e .env || fail "git clean failed"
             else
               log "Warning: ${PROJECT_DIR} is not a git repository, skipping git pull"
             fi
