@@ -52,13 +52,14 @@ jobs:
         uses: appleboy/ssh-action@v1.2.0
         env:
           BACKEND_PROJECT_DIR: ${{ secrets.BACKEND_PROJECT_DIR }}
+          DEPLOY_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
           script_stop: true
-          envs: BACKEND_PROJECT_DIR
+          envs: BACKEND_PROJECT_DIR,DEPLOY_SHA
           script: |
             set -euo pipefail
 
@@ -96,9 +97,24 @@ jobs:
               exit 1
             fi
 
-            git fetch --prune origin main
-            git checkout main
-            git pull --ff-only origin main
+            if [ -n "${DEPLOY_SHA:-}" ]; then
+              echo "Deploying exact commit: $DEPLOY_SHA"
+              git fetch --prune origin "$DEPLOY_SHA"
+              git checkout --detach "$DEPLOY_SHA"
+            else
+              git fetch --prune origin main
+              git checkout main
+              git pull --ff-only origin main
+            fi
+
+            REQUIRED_FILES="src/main.ts src/app.module.ts src/auth/guards/jwt-access.guard.ts src/auth/guards/jwt-refresh.guard.ts src/auth/types/auth-user.type.ts src/common/interceptors/logging.interceptor.ts"
+            for file in $REQUIRED_FILES; do
+              if [ ! -f "$file" ]; then
+                echo "Missing source file in deploy checkout: $file"
+                echo "Current commit: $(git rev-parse --short HEAD)"
+                exit 1
+              fi
+            done
 
             if command -v sudo >/dev/null 2>&1; then
               SUDO="sudo"
