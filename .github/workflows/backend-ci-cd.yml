@@ -123,6 +123,8 @@ jobs:
               SUDO=""
             fi
 
+            DOCKER_CMD="docker"
+
             if docker compose version >/dev/null 2>&1; then
               COMPOSE_CMD="docker compose"
             elif command -v docker-compose >/dev/null 2>&1; then
@@ -134,6 +136,7 @@ jobs:
 
             if ! docker info >/dev/null 2>&1; then
               if [ -n "$SUDO" ] && $SUDO docker info >/dev/null 2>&1; then
+                DOCKER_CMD="$SUDO docker"
                 if [ "$COMPOSE_CMD" = "docker compose" ]; then
                   COMPOSE_CMD="$SUDO docker compose"
                 else
@@ -145,6 +148,33 @@ jobs:
               fi
             fi
 
+            BACKEND_HOST_PORT="3000"
+            if [ -f ".env" ]; then
+              ENV_BACKEND_HOST_PORT="$(grep -E '^BACKEND_HOST_PORT=' .env | tail -n 1 | cut -d '=' -f 2- | tr -d '\r' || true)"
+              if [ -n "${ENV_BACKEND_HOST_PORT:-}" ]; then
+                BACKEND_HOST_PORT="$ENV_BACKEND_HOST_PORT"
+              fi
+            fi
+
+            PORT_CONFLICTS="$($DOCKER_CMD ps --format '{{.Names}} {{.Ports}}' | grep ":$BACKEND_HOST_PORT->" || true)"
+            if [ -n "$PORT_CONFLICTS" ] && ! echo "$PORT_CONFLICTS" | grep -q '^backend_app '; then
+              echo "Host port $BACKEND_HOST_PORT is already occupied:"
+              echo "$PORT_CONFLICTS"
+              echo "Set BACKEND_HOST_PORT in $PROJECT_DIR/.env to a free port (for example 3001) and update reverse proxy upstream."
+              exit 1
+            fi
+
             $COMPOSE_CMD -f docker-compose.prod.yml pull || true
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d --build
+            if ! $COMPOSE_CMD -f docker-compose.prod.yml up -d --build; then
+              echo "docker compose up failed. Host port diagnostics for $BACKEND_HOST_PORT:"
+              $DOCKER_CMD ps --format '{{.Names}} {{.Ports}}' | grep ":$BACKEND_HOST_PORT->" || true
+              if command -v ss >/dev/null 2>&1; then
+                if [ -n "$SUDO" ]; then
+                  $SUDO ss -ltnp | grep -E ":$BACKEND_HOST_PORT\\b" || true
+                else
+                  ss -ltnp | grep -E ":$BACKEND_HOST_PORT\\b" || true
+                fi
+              fi
+              exit 1
+            fi
             $COMPOSE_CMD -f docker-compose.prod.yml ps
