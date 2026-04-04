@@ -17,6 +17,11 @@ import { DiplomaHumanMapper } from './diploma-human.mapper';
 
 @Injectable()
 export class DiplomasService {
+  private readonly attempts = new Map<
+    string,
+    { count: number; blockedUntil?: number }
+  >();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly cryptoService: CryptoService,
@@ -130,8 +135,16 @@ export class DiplomasService {
     });
   }
 
-  async findByUniversity(universityId: number, requesterUserId?: number) {
+  async findByUniversity(
+    universityId: number,
+    requesterUserId?: number,
+    page?: number,
+    limit?: number,
+  ) {
     let targetUniversityId = universityId;
+
+    const safePage = !page || page < 1 ? 1 : page;
+    const safeLimit = !limit || limit < 1 || limit > 50 ? 10 : limit;
 
     if (requesterUserId) {
       const requester = await this.prisma.user.findUnique({
@@ -169,14 +182,34 @@ export class DiplomasService {
       throw new NotFoundException('University not found');
     }
 
+    const skip = (safePage - 1) * safeLimit;
+
+    const total = await this.prisma.diploma.count({
+      where: { universityId: targetUniversityId },
+    });
+
     const diplomas = await this.prisma.diploma.findMany({
       where: { universityId: targetUniversityId },
       include: {
         university: true,
       },
+      skip,
+      take: safeLimit,
+      orderBy: { createdAt: 'desc' },
     });
 
-    return diplomas.map((d) => this.mapper.toHumanDiploma(d));
+    const data = diplomas.map((d) => this.mapper.toHumanDiploma(d));
+
+    return {
+      data,
+      meta: {
+        page: safePage,
+        limit: safeLimit,
+        itemsOnPage: data.length,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / safeLimit)),
+      },
+    };
   }
 
   async findByUser(userId: number) {
@@ -413,7 +446,13 @@ export class DiplomasService {
     return { message: 'Token revoked' };
   }
 
-  async searchByNumber(number: string) {
+  async searchByNumber(number: string, ip: string) {
+    const record = this.attempts.get(ip) || { count: 0 };
+
+    if (record.blockedUntil && record.blockedUntil > Date.now()) {
+      throw new ForbiddenException('Too many attempts. Try later');
+    }
+
     const hash = this.cryptoService.hash(number);
 
     const diploma = await this.prisma.diploma.findFirst({
@@ -426,8 +465,23 @@ export class DiplomasService {
     });
 
     if (!diploma) {
+      record.count += 1;
+
+      if (record.count >= 5) {
+        record.blockedUntil = Date.now() + 60_000;
+        record.count = 0;
+
+        this.attempts.set(ip, record);
+
+        throw new ForbiddenException('Too many attempts. Blocked for 1 minute');
+      }
+
+      this.attempts.set(ip, record);
+
       throw new NotFoundException('Diploma not found');
     }
+
+    this.attempts.delete(ip);
 
     return this.mapper.toHumanDiploma(diploma);
   }
