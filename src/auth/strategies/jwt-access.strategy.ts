@@ -6,11 +6,6 @@ import type { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthUser, Role } from '../types/auth-user.type';
 
-
-function cookieExtractorAccess(req: Request): string | null {
-  return req?.cookies?.accessToken ?? null;
-}
-
 type JwtAccessPayload = {
   sub: number;
   email: string;
@@ -27,9 +22,18 @@ export class JwtAccessStrategy extends PassportStrategy(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
   ) {
+    const secret = config.get<string>('JWT_ACCESS_SECRET')!;
+    const accessCookieName =
+      config.get<string>('ACCESS_COOKIE_NAME')?.trim() || 'accessToken';
+
     super({
-      jwtFromRequest: ExtractJwt.fromExtractors([cookieExtractorAccess]),
-      secretOrKey: config.get<string>('JWT_ACCESS_SECRET')!,
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        (req: Request) => {
+          const c = req?.cookies;
+          return (c?.[accessCookieName] as string | undefined) ?? null;
+        },
+      ]),
+      secretOrKey: secret,
     });
   }
 

@@ -3,6 +3,7 @@
   Controller,
   Get,
   Post,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -12,7 +13,8 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { clearAuthCookies, setAuthCookies } from './auth.cookies';
 import { JwtAccessGuard } from './guards/jwt-access.guard';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { ACCESS_COOKIE_NAME } from './access-cookie-name';
 import { parseDurationMs } from './utils/parse-duration-ms';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AuthUser, AuthUserWithRefresh } from './types/auth-user.type';
@@ -56,13 +58,28 @@ export class AuthController {
       'lax'
     ).toLowerCase();
 
-    if (v === 'none' || v === 'strict' || v === 'lax') return v;
-    return 'lax';
+    let sameSite: 'lax' | 'strict' | 'none' = 'lax';
+    if (v === 'none' || v === 'strict' || v === 'lax') sameSite = v;
+    // SameSite=None требует Secure; иначе браузер отбрасывает Set-Cookie
+    if (sameSite === 'none' && !this.cookieSecure()) {
+      return 'lax';
+    }
+    return sameSite;
   }
 
-  private cookieDomain() {
+  /** Не задаём Domain для localhost — иначе куки с miss-click.ru не приживаются при локальной разработке. */
+  private cookieDomainForRequest(req: Request) {
     const value = this.config.get<string>('COOKIE_DOMAIN')?.trim();
-    return value ? value : undefined;
+    if (!value) return undefined;
+    const host = (req.hostname ?? '').toLowerCase();
+    if (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '[::1]'
+    ) {
+      return undefined;
+    }
+    return value;
   }
 
   private accessCookieName() {
@@ -227,6 +244,7 @@ export class AuthController {
   })
   async register(
     @Body() dto: RegisterDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.auth.register(dto);
@@ -237,7 +255,7 @@ export class AuthController {
       refreshToken: result.refreshToken,
       secure: this.cookieSecure(),
       sameSite: this.cookieSameSite(),
-      domain: this.cookieDomain(),
+      domain: this.cookieDomainForRequest(req),
       accessCookieName: this.accessCookieName(),
       refreshCookieName: this.refreshCookieName(),
       accessMaxAgeMs: this.accessMaxAgeMs(),
@@ -315,6 +333,7 @@ export class AuthController {
   })
   async login(
     @Body() dto: LoginDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.auth.login(dto);
@@ -325,7 +344,7 @@ export class AuthController {
       refreshToken: result.refreshToken,
       secure: this.cookieSecure(),
       sameSite: this.cookieSameSite(),
-      domain: this.cookieDomain(),
+      domain: this.cookieDomainForRequest(req),
       accessCookieName: this.accessCookieName(),
       refreshCookieName: this.refreshCookieName(),
       accessMaxAgeMs: this.accessMaxAgeMs(),
@@ -336,7 +355,7 @@ export class AuthController {
   }
 
   @Public()
-  @ApiCookieAuth('accessToken')
+  @ApiCookieAuth(ACCESS_COOKIE_NAME)
   @UseGuards(JwtRefreshGuard)
   @Post('refresh')
   @ApiOperation({
@@ -399,6 +418,7 @@ export class AuthController {
   })
   async refresh(
     @CurrentUser() user: AuthUserWithRefresh,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.auth.refreshTokens(user.id, user.refreshToken);
@@ -409,7 +429,7 @@ export class AuthController {
       refreshToken: result.refreshToken,
       secure: this.cookieSecure(),
       sameSite: this.cookieSameSite(),
-      domain: this.cookieDomain(),
+      domain: this.cookieDomainForRequest(req),
       accessCookieName: this.accessCookieName(),
       refreshCookieName: this.refreshCookieName(),
       accessMaxAgeMs: this.accessMaxAgeMs(),
@@ -419,7 +439,7 @@ export class AuthController {
     return { user: result.user };
   }
 
-  @ApiCookieAuth('accessToken')
+  @ApiCookieAuth(ACCESS_COOKIE_NAME)
   @Post('logout')
   @ApiOperation({ summary: 'Выход: сброс cookies и инвалидация refresh на сервере' })
   @ApiOkResponse({
@@ -452,6 +472,7 @@ export class AuthController {
   })
   async logout(
     @CurrentUser() user: AuthUser,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     await this.auth.logout(user.id);
@@ -459,7 +480,7 @@ export class AuthController {
     clearAuthCookies(res, {
       secure: this.cookieSecure(),
       sameSite: this.cookieSameSite(),
-      domain: this.cookieDomain(),
+      domain: this.cookieDomainForRequest(req),
       accessCookieName: this.accessCookieName(),
       refreshCookieName: this.refreshCookieName(),
     });
@@ -467,7 +488,7 @@ export class AuthController {
     return { ok: true };
   }
 
-  @ApiCookieAuth('accessToken')
+  @ApiCookieAuth(ACCESS_COOKIE_NAME)
   @UseGuards(JwtAccessGuard)
   @Get('status')
   @ApiOperation({ summary: 'Проверка сессии по access cookie' })
