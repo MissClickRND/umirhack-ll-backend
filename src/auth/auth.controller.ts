@@ -525,7 +525,7 @@ export class AuthController {
       },
     },
   })
-  status(@CurrentUser() user: AuthUser) {
-    return { authenticated: true, user };
+  async status(@CurrentUser() user: AuthUser) {
+    return this.auth.getStatus(user.id);
   }
 }

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 
 export class RegisterResponseUserDto {
@@ -10,6 +10,20 @@ export class RegisterResponseUserDto {
 
   @ApiProperty({ enum: Role, example: Role.STUDENT })
   role: Role;
+
+  @ApiPropertyOptional({
+    example: 10,
+    nullable: true,
+    description: 'ID университета (camelCase)',
+  })
+  universityId?: number | null;
+
+  @ApiPropertyOptional({
+    example: 10,
+    nullable: true,
+    description: 'ID университета (snake_case)',
+  })
+  university_id?: number | null;
 }
 
 export class RegisterResponseDto {
