@@ -88,9 +88,6 @@ export class DiplomasService {
         const symmetricKey = this.resolver.resolveUniversitySymmetricKey(
           university.encryptedSymmetricKey,
         );
-        const privateKey = this.resolver.resolveUniversityPrivateKey(
-          university.encryptedPrivateKey,
-        );
 
         const fullNameEncrypted = this.cryptoService.encryptSymmetric(
           d.fullNameAuthor,
@@ -113,7 +110,12 @@ export class DiplomasService {
           universityId: d.universityId,
         });
 
-        const signature = this.cryptoService.sign(payload, privateKey);
+        const signature = this.cryptoService.sign(
+          payload,
+          this.resolver.resolveUniversityPrivateKey(
+            university.encryptedPrivateKey,
+          ),
+        );
 
         return {
           fullNameAuthorEncrypted: fullNameEncrypted,
@@ -433,6 +435,7 @@ export class DiplomasService {
       data: {
         diplomaId,
         tokenHash,
+        encryptedToken: this.resolver.encryptRuntimeToken(token),
         expiresAt,
         isOneTime,
       },
@@ -633,27 +636,43 @@ export class DiplomasService {
       },
     });
 
-    return diplomas.map((d) => {
+    return diplomas.flatMap((d) => {
       const human = this.mapper.toHumanDiploma(d);
       const tokens = Array.isArray(human.tokens) ? human.tokens : [];
+      const tokenById = new Map(
+        d.tokens.map((t) => [
+          t.id,
+          (t as { encryptedToken?: string | null }).encryptedToken ?? null,
+        ]),
+      );
 
-      return {
-        diploma: {
-          id: human.id,
-          fullNameAuthor: human.fullNameAuthor,
-          registrationNumber: human.registrationNumber,
-          userId: human.userId,
-          universityId: human.universityId,
-          issuedAt: human.issuedAt,
-          specialty: human.specialty,
-          degreeLevel: human.degreeLevel,
-          status: human.status,
-          createdAt: human.createdAt,
-          updatedAt: human.updatedAt,
-          university: human.university,
-        },
-        tokens,
+      const diplomaView = {
+        id: human.id,
+        fullNameAuthor: human.fullNameAuthor,
+        registrationNumber: human.registrationNumber,
+        userId: human.userId,
+        universityId: human.universityId,
+        issuedAt: human.issuedAt,
+        specialty: human.specialty,
+        degreeLevel: human.degreeLevel,
+        status: human.status,
+        createdAt: human.createdAt,
+        updatedAt: human.updatedAt,
+        university: human.university,
       };
+
+      return tokens.map((token) => {
+        const encryptedToken = tokenById.get(token.id);
+        const plainToken = encryptedToken
+          ? this.resolver.decryptRuntimeToken(encryptedToken)
+          : null;
+
+        return {
+          token: plainToken,
+          tokenMeta: token,
+          diploma: diplomaView,
+        };
+      });
     });
   }
 }

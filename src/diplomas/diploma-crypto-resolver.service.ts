@@ -54,17 +54,38 @@ export class DiplomaCryptoResolverService {
   resolveUniversityPrivateKey(stored: string): string {
     const direct = stored?.trim();
 
-    // Backward compatibility: existing rows may keep raw PEM.
+    // Backward compatibility: old rows may still keep raw PEM.
     if (direct?.includes('BEGIN PRIVATE KEY')) {
       return direct;
     }
 
     const master = this.getMasterSymmetricKey();
 
+    let decrypted: string;
     try {
-      return this.cryptoService.decryptSymmetric(stored, master).trim();
+      decrypted = this.cryptoService.decryptSymmetric(stored, master).trim();
     } catch {
       throw new BadRequestException('University private key is invalid');
     }
+
+    if (!decrypted.includes('BEGIN PRIVATE KEY')) {
+      throw new BadRequestException('University private key is invalid');
+    }
+
+    return decrypted;
+  }
+
+  encryptRuntimeToken(token: string): string {
+    return this.cryptoService.encryptSymmetric(
+      token,
+      this.getMasterSymmetricKey(),
+    );
+  }
+
+  decryptRuntimeToken(stored: string): string {
+    return this.cryptoService.decryptSymmetric(
+      stored,
+      this.getMasterSymmetricKey(),
+    );
   }
 }

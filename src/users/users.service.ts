@@ -224,7 +224,10 @@ export class UsersService {
     if (!u.publicKey?.trim() || !u.encryptedPrivateKey?.trim()) {
       const { publicKey, privateKey } = this.crypto.generateKeyPair();
       data.publicKey = publicKey;
-      data.encryptedPrivateKey = privateKey;
+      data.encryptedPrivateKey = this.crypto.encryptSymmetric(
+        privateKey,
+        master,
+      );
     }
     if (!u.encryptedSymmetricKey?.trim()) {
       const symm = this.crypto.generateSymmetricKey();
@@ -316,6 +319,10 @@ export class UsersService {
 
     const master = this.getDiplomaSymmetricKey();
     const { publicKey, privateKey } = this.crypto.generateKeyPair();
+    const encryptedPrivateKey = this.crypto.encryptSymmetric(
+      privateKey,
+      master,
+    );
     const symm = this.crypto.generateSymmetricKey();
     const encryptedSymmetricKey = this.crypto.encryptSymmetric(symm, master);
 
@@ -333,7 +340,7 @@ export class UsersService {
           where: { id: university.id },
           data: {
             publicKey,
-            encryptedPrivateKey: privateKey,
+            encryptedPrivateKey,
             encryptedSymmetricKey,
           },
         });
