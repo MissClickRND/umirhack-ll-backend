@@ -51,14 +51,11 @@ export class DiplomaCryptoResolverService {
     return decrypted;
   }
 
-  resolveUniversityPrivateKey(stored: string, isEncrypted?: boolean): string {
+  resolveUniversityPrivateKey(stored: string): string {
     const direct = stored?.trim();
 
     // Backward compatibility: old rows may still keep raw PEM.
-    if (
-      (isEncrypted === false || isEncrypted == null) &&
-      direct?.includes('BEGIN PRIVATE KEY')
-    ) {
+    if (direct?.includes('BEGIN PRIVATE KEY')) {
       return direct;
     }
 

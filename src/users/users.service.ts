@@ -157,13 +157,6 @@ export class UsersService {
         privateKey,
         master,
       );
-      data.isPrivateKeyEncrypted = true;
-    } else if (!u.isPrivateKeyEncrypted) {
-      data.encryptedPrivateKey = this.crypto.encryptSymmetric(
-        u.encryptedPrivateKey,
-        master,
-      );
-      data.isPrivateKeyEncrypted = true;
     }
     if (!u.encryptedSymmetricKey?.trim()) {
       const symm = this.crypto.generateSymmetricKey();
@@ -277,7 +270,6 @@ export class UsersService {
           data: {
             publicKey,
             encryptedPrivateKey,
-            isPrivateKeyEncrypted: true,
             encryptedSymmetricKey,
           },
         });

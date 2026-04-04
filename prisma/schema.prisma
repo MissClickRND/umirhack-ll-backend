@@ -89,7 +89,6 @@ model University {
 
   publicKey             String? @map("public_key")
   encryptedPrivateKey   String? @map("encrypted_private_key")
-  isPrivateKeyEncrypted Boolean @default(false) @map("is_private_key_encrypted")
   encryptedSymmetricKey String? @map("encrypted_symmetric_key")
 
   createdAt DateTime @default(now()) @map("created_at")

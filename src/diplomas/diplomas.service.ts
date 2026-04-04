@@ -114,7 +114,6 @@ export class DiplomasService {
           payload,
           this.resolver.resolveUniversityPrivateKey(
             university.encryptedPrivateKey,
-            university.isPrivateKeyEncrypted,
           ),
         );
 
