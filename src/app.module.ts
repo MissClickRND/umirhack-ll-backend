@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { PrismaModule } from './prisma/prisma.module';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
@@ -31,6 +31,12 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
               'a1b2c3d4e5f6789012345678abcdef0123456789abcdef0123456789abcdef00',
             ),
         }).description('256-bit AES key as 64 hex chars; encrypts diploma PII'),
+        DIPLOMA_CACHE_TTL_MS: Joi.number()
+          .integer()
+          .min(1_000)
+          .max(3_600_000)
+          .default(120_000)
+          .description('In-memory diploma cache TTL (ms)'),
       }),
     }),
     ThrottlerModule.forRoot([

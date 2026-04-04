@@ -1,4 +1,5 @@
 import {
+  Inject,
   BadRequestException,
   ForbiddenException,
   Injectable,
@@ -6,6 +7,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from '@nestjs/cache-manager';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDiplomaBatchDto } from './dto/create-diplomas-batch.dto';
 import { CreateQrTokenDto } from './dto/create-qr-token.dto';
@@ -14,17 +17,22 @@ import { DiplomaStatus, Prisma } from '@prisma/client';
 import { UpdateDiplomaStatusDto } from './dto/update-diploma-status.dto';
 import * as crypto from 'crypto';
 import { buildDiplomaSigningPayload } from './diploma-signing.js';
+import { DiplomaCacheBusterService } from './diploma-cache-buster.service';
 
 @Injectable()
 export class DiplomasService {
   private key: string;
+  private readonly cacheTtlMs: number;
 
   constructor(
     private prisma: PrismaService,
     private readonly cryptoService: CryptoService,
     private readonly config: ConfigService,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
+    private readonly diplomaCache: DiplomaCacheBusterService,
   ) {
     this.key = this.cryptoService.generateSymmetricKey();
+    this.cacheTtlMs = this.config.get<number>('DIPLOMA_CACHE_TTL_MS', 120_000);
   }
 
   private getMasterSymmetricKey(): string {
@@ -245,9 +253,21 @@ export class DiplomasService {
         };
       });
 
-    return this.prisma.diploma.createMany({
+    const result = await this.prisma.diploma.createMany({
       data: diplomasToCreate,
     });
+
+    this.diplomaCache.bumpUniversities(universityIds);
+    const userIds = [
+      ...new Set(
+        normalizedDiplomas
+          .map((d) => d.userId)
+          .filter((id): id is number => id != null),
+      ),
+    ];
+    this.diplomaCache.bumpUsers(userIds);
+
+    return result;
   }
 
   async findByUniversity(universityId: number, requesterUserId?: number) {
@@ -289,14 +309,23 @@ export class DiplomasService {
       throw new NotFoundException('University not found');
     }
 
-    const diplomas = await this.prisma.diploma.findMany({
-      where: { universityId: targetUniversityId },
-      include: {
-        university: true,
-      },
-    });
+    const v = this.diplomaCache.universityListVersion(targetUniversityId);
+    const cacheKey = `diploma:list:uni:${targetUniversityId}:v${v}`;
 
-    return diplomas.map((d) => this.toHumanDiploma(d));
+    return this.cache.wrap(
+      cacheKey,
+      async () => {
+        const diplomas = await this.prisma.diploma.findMany({
+          where: { universityId: targetUniversityId },
+          include: {
+            university: true,
+          },
+        });
+
+        return diplomas.map((d) => this.toHumanDiploma(d));
+      },
+      this.cacheTtlMs,
+    );
   }
 
   async findByUser(userId: number) {
@@ -304,37 +333,60 @@ export class DiplomasService {
       throw new BadRequestException('Invalid userId');
     }
 
-    const diplomas = await this.prisma.diploma.findMany({
-      where: {
-        userId,
-      },
-      include: {
-        university: true,
-      },
-    });
+    const v = this.diplomaCache.userListVersion(userId);
+    const cacheKey = `diploma:list:user:${userId}:v${v}`;
 
-    return diplomas.map((d) => this.toHumanDiploma(d));
+    return this.cache.wrap(
+      cacheKey,
+      async () => {
+        const diplomas = await this.prisma.diploma.findMany({
+          where: {
+            userId,
+          },
+          include: {
+            university: true,
+          },
+        });
+
+        return diplomas.map((d) => this.toHumanDiploma(d));
+      },
+      this.cacheTtlMs,
+    );
   }
 
   async findById(id: number) {
-    const diploma = await this.prisma.diploma.findUnique({
-      where: { id },
-      include: {
-        university: true,
-        tokens: true,
+    const cacheKey = `diploma:byId:${id}`;
+
+    return this.cache.wrap(
+      cacheKey,
+      async () => {
+        const diploma = await this.prisma.diploma.findUnique({
+          where: { id },
+          include: {
+            university: true,
+            tokens: true,
+          },
+        });
+
+        if (!diploma) {
+          throw new NotFoundException('Diploma not found');
+        }
+
+        return this.toHumanDiploma(diploma);
       },
-    });
-
-    if (!diploma) {
-      throw new NotFoundException('Diploma not found');
-    }
-
-    return this.toHumanDiploma(diploma);
+      this.cacheTtlMs,
+    );
   }
 
   async update(id: number, dto: UpdateDiplomaStatusDto) {
     const diploma = await this.prisma.diploma.findUnique({
       where: { id },
+      select: {
+        id: true,
+        userId: true,
+        universityId: true,
+        registrationNumberHash: true,
+      },
     });
 
     if (!diploma) {
@@ -357,6 +409,13 @@ export class DiplomasService {
 
     if (!updated) {
       throw new NotFoundException('Diploma not found');
+    }
+
+    await this.cache.del(`diploma:byId:${id}`);
+    await this.cache.del(`diploma:search:${diploma.registrationNumberHash}`);
+    this.diplomaCache.bumpUniversityList(diploma.universityId);
+    if (diploma.userId != null) {
+      this.diplomaCache.bumpUserList(diploma.userId);
     }
 
     return this.toHumanDiploma(updated);
@@ -417,6 +476,8 @@ export class DiplomasService {
         isOneTime,
       },
     });
+
+    await this.cache.del(`diploma:byId:${diplomaId}`);
 
     return { token };
   }
@@ -507,6 +568,8 @@ export class DiplomasService {
       },
     });
 
+    await this.cache.del(`diploma:byId:${diploma.id}`);
+
     return this.toHumanDiploma(diploma);
   }
 
@@ -532,11 +595,20 @@ export class DiplomasService {
       },
     });
 
+    await this.cache.del(`diploma:byId:${diplomaId}`);
+
     return { message: 'Token revoked' };
   }
 
   async searchByNumber(number: string) {
     const hash = this.cryptoService.hash(number);
+    const cacheKey = `diploma:search:${hash}`;
+
+    type HumanDiploma = ReturnType<DiplomasService['toHumanDiploma']>;
+    const cached = await this.cache.get<HumanDiploma>(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
 
     const diploma = await this.prisma.diploma.findFirst({
       where: {
@@ -551,6 +623,8 @@ export class DiplomasService {
       throw new NotFoundException('Diploma not found');
     }
 
-    return this.toHumanDiploma(diploma);
+    const human = this.toHumanDiploma(diploma);
+    await this.cache.set(cacheKey, human, this.cacheTtlMs);
+    return human;
   }
 }
