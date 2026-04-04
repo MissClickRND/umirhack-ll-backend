@@ -1,10 +1,10 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateDiplomaBatchDto } from "./dto/create-diplomas-batch.dto";
 import { CreateDiplomaDto } from "./dto/create-diploma.dto";
 import { CreateQrTokenDto } from "./dto/create-qr-token.dto";
 import { CryptoService } from "../crypto/crypto.service";
-import { DiplomaStatus } from "@prisma/client";
+import { DiplomaStatus, Prisma } from "@prisma/client";
 
 @Injectable()
 export class DiplomasService {
@@ -18,25 +18,68 @@ export class DiplomasService {
     }
 
     async createBatch(dto: CreateDiplomaBatchDto) {
-        const data = dto.diplomas.map((d) => ({
-            fullNameAuthorEncrypted: this.cryptoService.encryptSymmetric(d.fullNameAuthor, this.key),
-            registrationNumberEncrypted: this.cryptoService.encryptSymmetric(
+        const diplomasToCreate: Prisma.DiplomaCreateManyInput[] = [];
+
+        for (const d of dto.diplomas) {
+
+            const university = await this.prisma.university.findUnique({
+                where: { id: d.universityId },
+            });
+
+            if (!university) {
+                throw new BadRequestException(`University not found: ${d.universityId}`);
+            }
+
+            if (!university.encryptedSymmetricKey) {
+                throw new BadRequestException('University has no symmetric key');
+            }
+
+            if (!university.encryptedPrivateKey) {
+                throw new BadRequestException('University has no private key');
+            }
+
+            const symmetricKey = university.encryptedSymmetricKey;
+            const privateKey = university.encryptedPrivateKey;
+
+            const fullNameEncrypted = this.cryptoService.encryptSymmetric(
+                d.fullNameAuthor,
+                symmetricKey,
+            );
+
+            const registrationNumberEncrypted = this.cryptoService.encryptSymmetric(
                 d.registrationNumber,
-                this.key,
-            ),
+                symmetricKey,
+            );
 
-            registrationNumberHash: this.cryptoService.hash(d.registrationNumber),
+            const registrationNumberHash = this.cryptoService.hash(d.registrationNumber);
 
-            userId: d.userId,
-            universityId: d.universityId,
-            issuedAt: d.issuedAt,
-            specialty: d.specialty,
-            degreeLevel: d.degreeLevel,
-            status: DiplomaStatus.ACTIVE,
-        }));
+            const payload = JSON.stringify({
+                fullName: d.fullNameAuthor,
+                registrationNumber: d.registrationNumber,
+                issuedAt: d.issuedAt,
+                universityId: d.universityId,
+            });
+
+            const signature = this.cryptoService.sign(payload, privateKey);
+
+            diplomasToCreate.push({
+                fullNameAuthorEncrypted: fullNameEncrypted,
+                registrationNumberEncrypted,
+                registrationNumberHash,
+
+                userId: d.userId,
+                universityId: d.universityId,
+                issuedAt: d.issuedAt,
+                specialty: d.specialty,
+                degreeLevel: d.degreeLevel,
+                status: DiplomaStatus.ACTIVE,
+
+                signature,
+            });
+        }
 
         return this.prisma.diploma.createMany({
-            data,
+            data: diplomasToCreate,
         });
     }
 

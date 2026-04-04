@@ -3,6 +3,7 @@ import * as crypto from 'crypto';
 
 @Injectable()
 export class CryptoService {
+    
 
     generateSymmetricKey(): string {
         return crypto.randomBytes(32).toString('hex'); // 256-bit key
