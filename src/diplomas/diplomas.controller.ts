@@ -96,8 +96,8 @@ export class DiplomasController {
 
   // 6. DELETE QR TOKEN
 
-  @Delete('qr-token/:tokenId')
   @Roles('STUDENT')
+  @Delete('qr-token/:tokenId')
   @ApiOperation({ summary: 'Отозвать QR-токен по ID' })
   @ApiParam({ name: 'tokenId', description: 'ID QR-токена' })
   revokeQrToken(@Param('tokenId', ParseIntPipe) tokenId: number) {
@@ -127,6 +127,7 @@ export class DiplomasController {
 
   // 9. GET BY ID
 
+  @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Получить диплом по ID' })
   @ApiParam({ name: 'id', description: 'ID диплома' })
@@ -136,7 +137,7 @@ export class DiplomasController {
 
   // 10. GET USER TOKENS
 
-  @Roles('STUDENT', 'ADMIN')
+  @Roles('STUDENT')
   @Get(':userId/list')
   @ApiOperation({ summary: 'Получить токены пользователя' })
   getUserTokens(@Param('userId', ParseIntPipe) userId: number) {

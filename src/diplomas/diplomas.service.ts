@@ -2,10 +2,8 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDiplomaBatchDto } from './dto/create-diplomas-batch.dto';
 import { CreateQrTokenDto } from './dto/create-qr-token.dto';
@@ -14,135 +12,17 @@ import { DiplomaStatus, Prisma } from '@prisma/client';
 import { UpdateDiplomaStatusDto } from './dto/update-diploma-status.dto';
 import * as crypto from 'crypto';
 import { buildDiplomaSigningPayload } from './diploma-signing.js';
+import { DiplomaCryptoResolverService } from './diploma-crypto-resolver.service';
+import { DiplomaHumanMapper } from './diploma-human.mapper';
 
 @Injectable()
 export class DiplomasService {
-  private key: string;
-
   constructor(
-    private prisma: PrismaService,
+    private readonly prisma: PrismaService,
     private readonly cryptoService: CryptoService,
-    private readonly config: ConfigService,
-  ) {
-    this.key = this.cryptoService.generateSymmetricKey();
-  }
-
-  private getMasterSymmetricKey(): string {
-    const key = this.config.get<string>('DIPLOMA_SYMMETRIC_KEY', {
-      infer: true,
-    });
-
-    if (!key || !/^[0-9a-fA-F]{64}$/.test(key)) {
-      throw new InternalServerErrorException(
-        'DIPLOMA_SYMMETRIC_KEY must be 64 hex characters (256-bit)',
-      );
-    }
-
-    return key;
-  }
-
-  private resolveUniversitySymmetricKey(stored: string): string {
-    const direct = stored?.trim();
-
-    // Backward compatibility: some records may still store plain 64-hex key.
-    if (direct && /^[0-9a-fA-F]{64}$/.test(direct)) {
-      return direct;
-    }
-
-    const master = this.getMasterSymmetricKey();
-
-    let decrypted: string;
-    try {
-      decrypted = this.cryptoService.decryptSymmetric(stored, master).trim();
-    } catch {
-      throw new BadRequestException('University symmetric key is invalid');
-    }
-
-    if (!/^[0-9a-fA-F]{64}$/.test(decrypted)) {
-      throw new BadRequestException('University symmetric key is invalid');
-    }
-
-    return decrypted;
-  }
-
-  private resolveUniversityPrivateKey(stored: string): string {
-    const direct = stored?.trim();
-
-    // Backward compatibility: existing rows may keep raw PEM.
-    if (direct?.includes('BEGIN PRIVATE KEY')) {
-      return direct;
-    }
-
-    const master = this.getMasterSymmetricKey();
-
-    try {
-      return this.cryptoService.decryptSymmetric(stored, master).trim();
-    } catch {
-      throw new BadRequestException('University private key is invalid');
-    }
-  }
-
-  private toHumanDiploma(
-    diploma: Prisma.DiplomaGetPayload<{
-      include: {
-        university: true;
-      };
-    }> & {
-      tokens?: Prisma.DiplomaTokenUncheckedCreateInput[];
-    },
-  ) {
-    if (!diploma.university.encryptedSymmetricKey) {
-      throw new BadRequestException('University has no symmetric key');
-    }
-
-    const symmetricKey = this.resolveUniversitySymmetricKey(
-      diploma.university.encryptedSymmetricKey,
-    );
-
-    const fullNameAuthor = this.cryptoService.decryptSymmetric(
-      diploma.fullNameAuthorEncrypted,
-      symmetricKey,
-    );
-
-    const registrationNumber = this.cryptoService.decryptSymmetric(
-      diploma.registrationNumberEncrypted,
-      symmetricKey,
-    );
-
-    const tokens = Array.isArray(diploma.tokens) ? diploma.tokens : null;
-
-    return {
-      id: diploma.id,
-      fullNameAuthor,
-      registrationNumber,
-      userId: diploma.userId,
-      universityId: diploma.universityId,
-      issuedAt: diploma.issuedAt,
-      specialty: diploma.specialty,
-      degreeLevel: diploma.degreeLevel,
-      status: diploma.status,
-      createdAt: diploma.createdAt,
-      updatedAt: diploma.updatedAt,
-      university: {
-        id: diploma.university.id,
-        name: diploma.university.name,
-        shortName: diploma.university.shortName,
-      },
-      ...(tokens
-        ? {
-            tokens: tokens.map((t) => ({
-              id: t.id,
-              diplomaId: t.diplomaId,
-              expiresAt: t.expiresAt,
-              revokedAt: t.revokedAt,
-              isOneTime: t.isOneTime,
-              lastUsedAt: t.lastUsedAt,
-              createdAt: t.createdAt,
-            })),
-          }
-        : {}),
-    };
-  }
+    private readonly resolver: DiplomaCryptoResolverService,
+    private readonly mapper: DiplomaHumanMapper,
+  ) {}
 
   async createBatch(dto: CreateDiplomaBatchDto, requesterUserId?: number) {
     let requesterUniversityId: number | null = null;
@@ -199,10 +79,10 @@ export class DiplomasService {
           throw new BadRequestException('University has no private key');
         }
 
-        const symmetricKey = this.resolveUniversitySymmetricKey(
+        const symmetricKey = this.resolver.resolveUniversitySymmetricKey(
           university.encryptedSymmetricKey,
         );
-        const privateKey = this.resolveUniversityPrivateKey(
+        const privateKey = this.resolver.resolveUniversityPrivateKey(
           university.encryptedPrivateKey,
         );
 
@@ -296,7 +176,7 @@ export class DiplomasService {
       },
     });
 
-    return diplomas.map((d) => this.toHumanDiploma(d));
+    return diplomas.map((d) => this.mapper.toHumanDiploma(d));
   }
 
   async findByUser(userId: number) {
@@ -313,7 +193,7 @@ export class DiplomasService {
       },
     });
 
-    return diplomas.map((d) => this.toHumanDiploma(d));
+    return diplomas.map((d) => this.mapper.toHumanDiploma(d));
   }
 
   async findById(id: number) {
@@ -329,7 +209,7 @@ export class DiplomasService {
       throw new NotFoundException('Diploma not found');
     }
 
-    return this.toHumanDiploma(diploma);
+    return this.mapper.toHumanDiploma(diploma);
   }
 
   async update(id: number, dto: UpdateDiplomaStatusDto) {
@@ -359,7 +239,7 @@ export class DiplomasService {
       throw new NotFoundException('Diploma not found');
     }
 
-    return this.toHumanDiploma(updated);
+    return this.mapper.toHumanDiploma(updated);
   }
 
   async createQrToken(
@@ -468,7 +348,7 @@ export class DiplomasService {
       throw new BadRequestException('Diploma has no signature');
     }
 
-    const symmetricKey = this.resolveUniversitySymmetricKey(
+    const symmetricKey = this.resolver.resolveUniversitySymmetricKey(
       university.encryptedSymmetricKey,
     );
 
@@ -507,7 +387,7 @@ export class DiplomasService {
       },
     });
 
-    return this.toHumanDiploma(diploma);
+    return this.mapper.toHumanDiploma(diploma);
   }
 
   async revokeQrTokenById(tokenId: number) {
@@ -549,7 +429,7 @@ export class DiplomasService {
       throw new NotFoundException('Diploma not found');
     }
 
-    return this.toHumanDiploma(diploma);
+    return this.mapper.toHumanDiploma(diploma);
   }
 
   async getUserTokens(userId: number) {
@@ -578,7 +458,7 @@ export class DiplomasService {
     });
 
     return diplomas.map((d) => {
-      const human = this.toHumanDiploma(d);
+      const human = this.mapper.toHumanDiploma(d);
       const tokens = Array.isArray(human.tokens) ? human.tokens : [];
 
       return {

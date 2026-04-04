@@ -29,7 +29,9 @@ async function bootstrap() {
   const accessCookieName =
     configService.get<string>('ACCESS_COOKIE_NAME')?.trim() || 'accessToken';
 
-  app.useGlobalInterceptors(new LoggingInterceptor());
+  app.useGlobalInterceptors(
+    new LoggingInterceptor(),
+  );
   app.useGlobalFilters(new AllExceptionFilter());
 
   app.use(cookieParser());
