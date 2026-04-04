@@ -139,10 +139,19 @@ export class DiplomasController {
 
   @Public()
   @Get('search')
-  @ApiOperation({ summary: 'Поиск диплома по номеру' })
+  @ApiOperation({ summary: 'Поиск диплома по номеру и ФИО' })
   @ApiQuery({ name: 'number', description: 'Номер диплома', required: true })
-  search(@Query('number') number: string, @Req() req: Request) {
-    return this.diplomasService.searchByNumber(number, req.ip ?? 'unknown');
+  @ApiQuery({ name: 'fullName', description: 'ФИО студента', required: true })
+  search(
+    @Query('number') number: string,
+    @Query('fullName') fullName: string,
+    @Req() req: Request,
+  ) {
+    return this.diplomasService.searchByNumber(
+      number,
+      fullName,
+      req.ip ?? 'unknown',
+    );
   }
 
   // 9. GET BY ID

@@ -493,7 +493,7 @@ export class DiplomasService {
     return { message: 'Token revoked' };
   }
 
-  async searchByNumber(number: string, ip: string) {
+  async searchByNumber(number: string, fullName: string, ip: string) {
     const record = this.attempts.get(ip) || { count: 0 };
 
     if (record.blockedUntil && record.blockedUntil > Date.now()) {
@@ -511,7 +511,15 @@ export class DiplomasService {
       },
     });
 
-    if (!diploma) {
+    const isNameMatch = (() => {
+      if (!diploma) return false;
+      const human = this.mapper.toHumanDiploma(diploma);
+      const normalize = (value: string) =>
+        value.trim().replace(/\s+/g, ' ').toLowerCase();
+      return normalize(human.fullNameAuthor) === normalize(fullName);
+    })();
+
+    if (!diploma || !isNameMatch) {
       record.count += 1;
 
       if (record.count >= 5) {
