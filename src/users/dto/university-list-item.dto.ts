@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/** Элемент списка вузов для GET /users/universities (без ключей шифрования). */
+/** Элемент списка вузов для GET /users/universities (без ключей и секретов). */
 export class UniversityListItemDto {
   @ApiProperty({
     example: 10,
@@ -17,7 +17,7 @@ export class UniversityListItemDto {
   @ApiProperty({
     example: 'МГУ',
     nullable: true,
-    description: 'Краткое название; может отсутствовать',
+    description: 'Краткое название',
   })
   shortName: string | null;
 
