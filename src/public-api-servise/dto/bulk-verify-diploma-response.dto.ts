@@ -25,6 +25,6 @@ export class BulkVerifyDiplomaShortDto {
   @ApiProperty({ example: 'ABC-123' })
   diplomaNumber!: string;
 
-  @ApiProperty({ enum: DiplomaStatus, example: DiplomaStatus.ISSUED })
+  @ApiProperty({ enum: DiplomaStatus, example: DiplomaStatus.VALID })
   status!: DiplomaStatus;
 }
