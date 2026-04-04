@@ -43,6 +43,18 @@ export class UsersService {
     });
   }
 
+  getAllUniversities() {
+    return this.prisma.university.findMany({
+      select: {
+        id: true,
+        name: true,
+        shortName: true,
+        createdAt: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async updateRole(params: { userId: number; role: Role }) {
     const { userId, role } = params;
 

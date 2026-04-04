@@ -26,6 +26,7 @@ import {
   VerificationAction,
 } from './dto/review-verification.dto';
 import { AttachDiplomaResponseDto } from './dto/attach-diploma-response.dto';
+import { UniversityListItemDto } from './dto/university-list-item.dto';
 
 @ApiTags('users')
 @ApiCookieAuth(ACCESS_COOKIE_NAME)
@@ -58,6 +59,33 @@ export class UsersController {
   @Get('users')
   getAll() {
     return this.users.getAll();
+  }
+
+  @ApiOperation({ summary: 'Получение всех вузов (Админ)' })
+  @ApiOkResponse({
+    description:
+      'Массив вузов: id, name, shortName, createdAt. Ключи шифрования не возвращаются.',
+    type: UniversityListItemDto,
+    isArray: true,
+    example: [
+      {
+        id: 1,
+        name: 'Московский государственный университет',
+        shortName: 'МГУ',
+        createdAt: '2025-01-10T08:00:00.000Z',
+      },
+      {
+        id: 2,
+        name: 'Санкт-Петербургский политехнический университет',
+        shortName: 'СПбПУ',
+        createdAt: '2025-01-12T14:20:00.000Z',
+      },
+    ],
+  })
+  @Roles('ADMIN')
+  @Get('users/universities')
+  getAllUniversities() {
+    return this.users.getAllUniversities();
   }
 
   @ApiOperation({ summary: 'Получение заявок на верификацию (Админ)' })
