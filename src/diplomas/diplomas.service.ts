@@ -239,7 +239,7 @@ export class DiplomasService {
           issuedAt: d.issuedAt,
           specialty: d.specialty,
           degreeLevel: d.degreeLevel,
-          status: DiplomaStatus.ISSUED,
+          status: DiplomaStatus.VALID,
 
           signature,
         };
@@ -510,23 +510,21 @@ export class DiplomasService {
     return this.toHumanDiploma(diploma);
   }
 
-  async revokeQrToken(diplomaId: number) {
-    const token = await this.prisma.diplomaToken.findFirst({
-      where: {
-        diplomaId,
-        revokedAt: null, // находим активные
-      },
-      orderBy: {
-        createdAt: 'desc', // берём последний
-      },
+  async revokeQrTokenById(tokenId: number) {
+    const token = await this.prisma.diplomaToken.findUnique({
+      where: { id: tokenId },
     });
 
     if (!token) {
-      throw new NotFoundException('Active token not found');
+      throw new NotFoundException('Token not found');
+    }
+
+    if (token.revokedAt) {
+      throw new BadRequestException('Token already revoked');
     }
 
     await this.prisma.diplomaToken.update({
-      where: { id: token.id },
+      where: { id: tokenId },
       data: {
         revokedAt: new Date(),
       },
@@ -552,5 +550,54 @@ export class DiplomasService {
     }
 
     return this.toHumanDiploma(diploma);
+  }
+
+  async getUserTokens(userId: number) {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new BadRequestException('Invalid userId');
+    }
+
+    const diplomas = await this.prisma.diploma.findMany({
+      where: {
+        userId,
+      },
+      include: {
+        university: true,
+        tokens: {
+          where: {
+            revokedAt: null,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return diplomas.map((d) => {
+      const human = this.toHumanDiploma(d);
+      const tokens = Array.isArray(human.tokens) ? human.tokens : [];
+
+      return {
+        diploma: {
+          id: human.id,
+          fullNameAuthor: human.fullNameAuthor,
+          registrationNumber: human.registrationNumber,
+          userId: human.userId,
+          universityId: human.universityId,
+          issuedAt: human.issuedAt,
+          specialty: human.specialty,
+          degreeLevel: human.degreeLevel,
+          status: human.status,
+          createdAt: human.createdAt,
+          updatedAt: human.updatedAt,
+          university: human.university,
+        },
+        tokens,
+      };
+    });
   }
 }

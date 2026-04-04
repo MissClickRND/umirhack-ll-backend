@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -65,7 +66,7 @@ export class DiplomasController {
     return this.diplomasService.findByUser(userId);
   }
 
-  // 4. REVOKE
+  // 4. UPDATE DIPLOMA STATUS
 
   @Roles('UNIVERSITY', 'ADMIN')
   @Patch(':id')
@@ -93,7 +94,17 @@ export class DiplomasController {
     return this.diplomasService.createQrToken(id, dto, user.id);
   }
 
-  // 6. GET BY QR TOKEN
+  // 6. DELETE QR TOKEN
+
+  @Delete('qr-token/:tokenId')
+  @Roles('STUDENT')
+  @ApiOperation({ summary: 'Отозвать QR-токен по ID' })
+  @ApiParam({ name: 'tokenId', description: 'ID QR-токена' })
+  revokeQrToken(@Param('tokenId', ParseIntPipe) tokenId: number) {
+    return this.diplomasService.revokeQrTokenById(tokenId);
+  }
+
+  // 7. GET BY QR TOKEN
 
   @Public()
   @Get('qr-token')
@@ -103,7 +114,7 @@ export class DiplomasController {
     return this.diplomasService.findByQrToken(token);
   }
 
-  // 7. SEARCH BY NUMBER
+  // 8. SEARCH BY NUMBER
   // GET /diplomas/search?number=...
 
   @Public()
@@ -114,12 +125,21 @@ export class DiplomasController {
     return this.diplomasService.searchByNumber(number);
   }
 
-  // 8. GET BY ID
+  // 9. GET BY ID
 
   @Get(':id')
   @ApiOperation({ summary: 'Получить диплом по ID' })
   @ApiParam({ name: 'id', description: 'ID диплома' })
   getById(@Param('id', ParseIntPipe) id: number) {
     return this.diplomasService.findById(id);
+  }
+
+  // 10. GET USER TOKENS
+
+  @Roles('STUDENT', 'ADMIN')
+  @Get(':userId/list')
+  @ApiOperation({ summary: 'Получить токены пользователя' })
+  getUserTokens(@Param('userId', ParseIntPipe) userId: number) {
+    return this.diplomasService.getUserTokens(userId);
   }
 }
