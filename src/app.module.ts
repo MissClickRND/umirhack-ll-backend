@@ -6,6 +6,7 @@ import Joi from 'joi';
 import { JwtAccessGuard } from './auth/guards/jwt-access.guard';
 import { RolesGuard } from './auth/guards/roles.guards';
 import { UsersModule } from './users/users.module';
+import { DiplomasModule } from './diplomas/diplomas.module';
 
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
@@ -27,6 +28,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
     PrismaModule,
     AuthModule,
     UsersModule,
+    DiplomasModule,
   ],
   providers: [
     {
