@@ -35,8 +35,11 @@ export class DiplomasController {
   @Post('batch')
   @ApiOperation({ summary: 'Создать batch дипломов' })
   @ApiBody({ type: CreateDiplomaBatchDto })
-  createBatch(@Body() dto: CreateDiplomaBatchDto) {
-    return this.diplomasService.createBatch(dto);
+  createBatch(
+    @Body() dto: CreateDiplomaBatchDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.diplomasService.createBatch(dto, user.id);
   }
 
   // 2. GET BY UNIVERSITY
@@ -45,12 +48,16 @@ export class DiplomasController {
   @Get('university/:universityId')
   @ApiOperation({ summary: 'Получить дипломы по университету' })
   @ApiParam({ name: 'universityId', description: 'ID университета' })
-  getByUniversity(@Param('universityId', ParseIntPipe) universityId: number) {
-    return this.diplomasService.findByUniversity(universityId);
+  getByUniversity(
+    @Param('universityId', ParseIntPipe) universityId: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.diplomasService.findByUniversity(universityId, user.id);
   }
 
   // 3. GET BY USER
 
+  @Roles('STUDENT')
   @Get('user/:userId')
   @ApiOperation({ summary: 'Получить дипломы пользователя' })
   @ApiParam({ name: 'userId', description: 'ID пользователя' })

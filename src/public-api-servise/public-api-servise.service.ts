@@ -52,7 +52,7 @@ export class PublicApiServiseService {
   async verifyBatch(
     dto: BulkVerifyDiplomasDto,
   ): Promise<BulkVerifyDiplomaItem[]> {
-    const symmetricKey = this.getDiplomaSymmetricKey();
+    const masterSymmetricKey = this.getDiplomaSymmetricKey();
     const numbers = dto.diplomaNumbers;
 
     const seenHashes = new Set<string>();
@@ -103,16 +103,43 @@ export class PublicApiServiseService {
         continue;
       }
 
+      const storedUniversitySymmetricKey =
+        diploma.university.encryptedSymmetricKey;
+      if (!storedUniversitySymmetricKey?.trim()) {
+        results.push(short());
+        continue;
+      }
+
+      let universitySymmetricKey: string;
+      try {
+        const trimmed = storedUniversitySymmetricKey.trim();
+        if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+          universitySymmetricKey = trimmed;
+        } else {
+          universitySymmetricKey = this.cryptoService
+            .decryptSymmetric(trimmed, masterSymmetricKey)
+            .trim();
+        }
+      } catch {
+        results.push(short());
+        continue;
+      }
+
+      if (!/^[0-9a-fA-F]{64}$/.test(universitySymmetricKey)) {
+        results.push(short());
+        continue;
+      }
+
       let fullNameAuthor: string;
       let registrationNumber: string;
       try {
         fullNameAuthor = this.cryptoService.decryptSymmetric(
           diploma.fullNameAuthorEncrypted,
-          symmetricKey,
+          universitySymmetricKey,
         );
         registrationNumber = this.cryptoService.decryptSymmetric(
           diploma.registrationNumberEncrypted,
-          symmetricKey,
+          universitySymmetricKey,
         );
       } catch {
         results.push(short());

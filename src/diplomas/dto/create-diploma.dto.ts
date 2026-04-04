@@ -21,7 +21,7 @@ export class CreateDiplomaDto {
   @IsString()
   fullNameAuthor!: string;
 
-  @ApiProperty({ example: 'REG-12345' })
+  @ApiProperty({ example: '1234567890123' })
   @IsString()
   registrationNumber!: string;
 
