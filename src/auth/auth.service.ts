@@ -2,6 +2,7 @@
   BadRequestException,
   ForbiddenException,
   Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -37,6 +38,23 @@ export class AuthService {
 
   private getRefreshExpires() {
     return (this.config.get('JWT_REFRESH_EXPIRES') ?? '7d') as StringValue;
+  }
+
+  private mapAuthUser(user: {
+    id: number;
+    email: string;
+    role: Role;
+    organizationId: number | null;
+  }) {
+    const universityId = user.organizationId;
+
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      universityId,
+      university_id: universityId,
+    };
   }
 
   async register(dto: RegisterDto) {
@@ -91,6 +109,7 @@ export class AuthService {
               email: true,
               id: true,
               role: true,
+              organizationId: true,
               tokenVersion: true,
             },
           })
@@ -113,6 +132,7 @@ export class AuthService {
                 email: true,
                 id: true,
                 role: true,
+                organizationId: true,
                 tokenVersion: true,
               },
             });
@@ -127,7 +147,7 @@ export class AuthService {
     await this.setRefreshTokenHash(user.id, tokens.refreshToken);
 
     return {
-      user: { id: user.id, email: user.email, role: user.role },
+      user: this.mapAuthUser(user),
       ...tokens,
     };
   }
@@ -141,6 +161,7 @@ export class AuthService {
         email: true,
         passwordHash: true,
         role: true,
+        organizationId: true,
         tokenVersion: true,
       },
     });
@@ -150,7 +171,7 @@ export class AuthService {
     const ok = await bcrypt.compare(dto.password, user.passwordHash);
     if (!ok) throw new BadRequestException('Неверный пароль');
 
-    const safeUser = { id: user.id, email: user.email, role: user.role };
+    const safeUser = this.mapAuthUser(user);
     const tokens = await this.issueTokens(
       user.id,
       user.email,
@@ -179,6 +200,7 @@ export class AuthService {
         email: true,
         hashedRefreshToken: true,
         role: true,
+        organizationId: true,
         tokenVersion: true,
       },
     });
@@ -202,8 +224,29 @@ export class AuthService {
     await this.setRefreshTokenHash(user.id, tokens.refreshToken);
 
     return {
-      user: { id: user.id, email: user.email, role: user.role },
+      user: this.mapAuthUser(user),
       ...tokens,
+    };
+  }
+
+  async getStatus(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        organizationId: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    return {
+      authenticated: true,
+      user: this.mapAuthUser(user),
     };
   }
 

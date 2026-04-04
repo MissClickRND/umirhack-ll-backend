@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 
 /** Тело user после login */
@@ -11,6 +11,20 @@ export class AuthUserBriefDto {
 
   @ApiProperty({ enum: Role, example: Role.STUDENT })
   role: Role;
+
+  @ApiPropertyOptional({
+    example: 10,
+    nullable: true,
+    description: 'ID университета (camelCase)',
+  })
+  universityId?: number | null;
+
+  @ApiPropertyOptional({
+    example: 10,
+    nullable: true,
+    description: 'ID университета (snake_case)',
+  })
+  university_id?: number | null;
 }
 
 export class LoginResponseDto {
@@ -32,6 +46,20 @@ export class AuthStatusUserDto {
 
   @ApiProperty({ enum: Role, example: Role.STUDENT })
   role: Role;
+
+  @ApiPropertyOptional({
+    example: 10,
+    nullable: true,
+    description: 'ID университета (camelCase)',
+  })
+  universityId?: number | null;
+
+  @ApiPropertyOptional({
+    example: 10,
+    nullable: true,
+    description: 'ID университета (snake_case)',
+  })
+  university_id?: number | null;
 }
 
 export class AuthStatusResponseDto {
