@@ -46,14 +46,13 @@ export class AuthService {
     role: Role;
     organizationId: number | null;
   }) {
-    const universityId = user.organizationId;
+    const university_id = user.organizationId;
 
     return {
       id: user.id,
       email: user.email,
       role: user.role,
-      universityId,
-      university_id: universityId,
+      university_id,
     };
   }
 
