@@ -188,7 +188,7 @@ export class UsersController {
       id: 100,
       userId: 2,
       universityId: 10,
-      status: 'ISSUED',
+      status: 'VALID',
     },
   })
   @Roles('STUDENT')

@@ -2,7 +2,7 @@
 CREATE TYPE "Role" AS ENUM ('ADMIN', 'HR', 'NEED_VERIFICATION', 'UNIVERSITY', 'STUDENT');
 
 -- CreateEnum
-CREATE TYPE "DiplomaStatus" AS ENUM ('ACTIVE', 'REVOKED');
+CREATE TYPE "DiplomaStatus" AS ENUM ('VALID', 'REVOKED');
 
 -- CreateEnum
 CREATE TYPE "DegreeLevel" AS ENUM ('BACHELOR', 'MAGISTRACY', 'SPECIALIST', 'DOCTORATE');
@@ -15,7 +15,9 @@ CREATE TABLE "User" (
     "hashedRefreshToken" TEXT,
     "tokenVersion" INTEGER NOT NULL DEFAULT 0,
     "role" "Role" NOT NULL DEFAULT 'HR',
-    "universityId" TEXT,
+    "organization_id" INTEGER,
+    "pending_university_name" TEXT,
+    "pending_university_short_name" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -24,17 +26,17 @@ CREATE TABLE "User" (
 
 -- CreateTable
 CREATE TABLE "diplomas" (
-    "id" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
     "full_name_author" TEXT NOT NULL,
     "registration_number" TEXT NOT NULL,
     "registration_number_hash" TEXT NOT NULL,
     "user_id" INTEGER,
-    "university_id" TEXT NOT NULL,
+    "university_id" INTEGER NOT NULL,
     "issued_at" TIMESTAMP(3) NOT NULL,
     "specialty" TEXT NOT NULL,
     "degree_level" "DegreeLevel" NOT NULL,
     "status" "DiplomaStatus" NOT NULL,
-    "signature" TEXT,
+    "signature" TEXT NOT NULL DEFAULT '',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -43,8 +45,8 @@ CREATE TABLE "diplomas" (
 
 -- CreateTable
 CREATE TABLE "diploma_tokens" (
-    "id" TEXT NOT NULL,
-    "diploma_id" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
+    "diploma_id" INTEGER NOT NULL,
     "token_hash" TEXT NOT NULL,
     "expires_at" TIMESTAMP(3),
     "revoked_at" TIMESTAMP(3),
@@ -57,7 +59,7 @@ CREATE TABLE "diploma_tokens" (
 
 -- CreateTable
 CREATE TABLE "universities" (
-    "id" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
     "short_name" TEXT,
     "public_key" TEXT,
@@ -78,8 +80,11 @@ CREATE UNIQUE INDEX "diplomas_registration_number_hash_key" ON "diplomas"("regis
 -- CreateIndex
 CREATE UNIQUE INDEX "diploma_tokens_token_hash_key" ON "diploma_tokens"("token_hash");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "universities_name_key" ON "universities"("name");
+
 -- AddForeignKey
-ALTER TABLE "User" ADD CONSTRAINT "User_universityId_fkey" FOREIGN KEY ("universityId") REFERENCES "universities"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "User" ADD CONSTRAINT "User_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "universities"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "diplomas" ADD CONSTRAINT "diplomas_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;

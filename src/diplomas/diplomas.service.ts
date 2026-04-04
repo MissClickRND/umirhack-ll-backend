@@ -239,7 +239,7 @@ export class DiplomasService {
           issuedAt: d.issuedAt,
           specialty: d.specialty,
           degreeLevel: d.degreeLevel,
-          status: DiplomaStatus.ISSUED,
+          status: DiplomaStatus.VALID,
 
           signature,
         };

@@ -83,7 +83,7 @@ export class PublicApiServiseService {
       if (!diploma) {
         results.push({
           diplomaNumber,
-          status: DiplomaStatus.ISSUED,
+          status: DiplomaStatus.VALID,
         });
         continue;
       }
